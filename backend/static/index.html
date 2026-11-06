@@ -1,0 +1,1105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Antigravity AI — Autonomous Couple Face Swap & Body Matching Studio</title>
+  <meta name="description" content="Ultra-realistic autonomous couple face swap and body proportion matching powered by InsightFace, OpenCV LAB color transfer, and Gemini Pro Vision.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            void: '#050510',
+            abyss: '#0a0a1a',
+            cosmos: '#0f0f2e',
+            nebula: '#1a1a3e',
+            stardust: '#2a2a5e',
+            uv: {
+              start: '#6366f1',
+              mid: '#8b5cf6',
+              end: '#a855f7',
+              glow: '#c084fc'
+            },
+            plasma: '#ec4899',
+            cyanpulse: '#06b6d4'
+          },
+          fontFamily: {
+            display: ['Outfit', 'sans-serif'],
+            body: ['Inter', 'sans-serif']
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #050510;
+      color: #f1f5f9;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    .bg-mesh {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      background:
+        radial-gradient(ellipse 80% 50% at 20% 15%, rgba(99, 102, 241, 0.15) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 40% at 85% 85%, rgba(168, 85, 247, 0.12) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 50% at 50% 50%, rgba(6, 182, 212, 0.08) 0%, transparent 65%),
+        #050510;
+    }
+    .glass-card {
+      background: rgba(15, 15, 46, 0.65);
+      backdrop-filter: blur(24px) saturate(180%);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+      border: 1px solid rgba(99, 102, 241, 0.18);
+      border-radius: 1.25rem;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .glass-card:hover {
+      border-color: rgba(99, 102, 241, 0.35);
+      box-shadow: 0 0 40px rgba(99, 102, 241, 0.1);
+    }
+    .dropzone {
+      position: relative;
+      border: 2px dashed rgba(99, 102, 241, 0.35);
+      border-radius: 1.25rem;
+      background: rgba(99, 102, 241, 0.04);
+      transition: all 0.25s ease;
+      cursor: pointer;
+      overflow: hidden;
+    }
+    .dropzone:hover {
+      border-color: rgba(139, 92, 246, 0.7);
+      background: rgba(99, 102, 241, 0.08);
+      transform: translateY(-2px);
+      box-shadow: 0 10px 30px rgba(99, 102, 241, 0.15);
+    }
+    .dropzone.drag-over {
+      border-color: #6366f1;
+      background: rgba(99, 102, 241, 0.16);
+      box-shadow: 0 0 30px rgba(99, 102, 241, 0.3);
+      transform: scale(1.02);
+    }
+    .dropzone.has-file {
+      border-color: #10b981;
+      border-style: solid;
+      background: rgba(16, 185, 129, 0.05);
+    }
+    .btn-gradient {
+      background: linear-gradient(135deg, #6366f1, #8b5cf6 50%, #a855f7);
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 20px rgba(99, 102, 241, 0.35);
+    }
+    .btn-gradient:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px rgba(99, 102, 241, 0.5), 0 0 50px rgba(168, 85, 247, 0.3);
+    }
+    .btn-gradient:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      filter: grayscale(0.5);
+      transform: none;
+    }
+    .toggle-track {
+      width: 48px;
+      height: 26px;
+      background: rgba(99, 102, 241, 0.2);
+      border-radius: 9999px;
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      cursor: pointer;
+      transition: all 0.25s ease;
+      position: relative;
+    }
+    .toggle-track.active {
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      border-color: #8b5cf6;
+    }
+    .toggle-thumb {
+      width: 20px;
+      height: 20px;
+      background: #ffffff;
+      border-radius: 9999px;
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    }
+    .toggle-track.active .toggle-thumb {
+      transform: translateX(22px);
+    }
+    .slider-container {
+      position: relative;
+      overflow: hidden;
+      border-radius: 1rem;
+      border: 1px solid rgba(99, 102, 241, 0.25);
+      user-select: none;
+      touch-action: pan-y;
+      background: #000;
+    }
+    .slider-handle {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      background: #ffffff;
+      box-shadow: 0 0 15px rgba(255, 255, 255, 0.8), 0 0 30px rgba(99, 102, 241, 0.6);
+      cursor: col-resize;
+      z-index: 30;
+    }
+    .slider-button {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 42px;
+      height: 42px;
+      border-radius: 9999px;
+      background: #ffffff;
+      color: #050510;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+      cursor: col-resize;
+    }
+    .spinner {
+      border: 3px solid rgba(99, 102, 241, 0.2);
+      border-top-color: #6366f1;
+      border-radius: 9999px;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .shimmer-bar {
+      background: linear-gradient(90deg, #6366f1, #8b5cf6, #06b6d4, #6366f1);
+      background-size: 200% 100%;
+      animation: shimmer 2s linear infinite;
+    }
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+  </style>
+</head>
+<body class="selection:bg-uv-start selection:text-white">
+  <div class="bg-mesh"></div>
+
+  <!-- Header -->
+  <header class="w-full border-b border-indigo-500/15 bg-void/60 backdrop-blur-md sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-uv-start via-uv-mid to-plasma flex items-center justify-center shadow-lg shadow-uv-start/25">
+          <i data-lucide="sparkles" class="w-6 h-6 text-white"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-xl font-extrabold tracking-tight font-display bg-gradient-to-r from-white via-indigo-200 to-cyanpulse bg-clip-text text-transparent">
+              ANTIGRAVITY AI
+            </h1>
+            <span class="px-2.5 py-0.5 text-[10px] font-bold tracking-wider uppercase rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
+              v4.0 Core
+            </span>
+          </div>
+          <p class="text-xs text-slate-400">Autonomous Couple Face Swap & Body Matching Studio</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <a href="/docs" target="_blank" class="text-xs px-3 py-1.5 rounded-lg border border-indigo-500/25 hover:border-indigo-400/50 bg-indigo-500/5 text-slate-300 hover:text-white transition flex items-center gap-1.5">
+          <i data-lucide="file-code-2" class="w-3.5 h-3.5 text-uv-glow"></i>
+          <span>Swagger API</span>
+        </a>
+        <div id="system-status-badge" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 text-xs">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span id="system-status-text">Engine Ready</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+
+    <!-- Hero Pitch -->
+    <div class="text-center max-w-3xl mx-auto space-y-3">
+      <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-xs text-indigo-300 font-medium">
+        <i data-lucide="shield-check" class="w-3.5 h-3.5 text-indigo-400"></i>
+        Zero-Distortion Autonomous Subject Mapping
+      </div>
+      <h2 class="text-3xl sm:text-5xl font-extrabold font-display tracking-tight text-white">
+        Precision Couple Face Swap <br/>
+        <span class="bg-gradient-to-r from-uv-start via-uv-glow to-plasma bg-clip-text text-transparent">
+          & Anatomical Harmonization
+        </span>
+      </h2>
+      <p class="text-slate-400 text-sm sm:text-base leading-relaxed">
+        Upload husband and wife source portraits alongside any couple reference scene. Our autonomous pipeline maps identities with Poisson blending, LAB skin color transfer, and silhouette calibration.
+      </p>
+    </div>
+
+    <!-- Upload Grid (3 Dropzones) -->
+    <section>
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-2">
+          <i data-lucide="layers" class="w-5 h-5 text-indigo-400"></i>
+          <h3 class="text-lg font-bold font-display text-white">1. Source & Reference Photos</h3>
+        </div>
+        <button id="btn-swap-mapping" type="button" class="text-xs px-3 py-1.5 rounded-lg border border-indigo-500/30 bg-indigo-500/10 text-indigo-300 hover:bg-indigo-500/20 flex items-center gap-1.5 transition">
+          <i data-lucide="arrow-left-right" class="w-3.5 h-3.5"></i>
+          <span>Invert Husband / Wife Target Positions</span>
+        </button>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+        
+        <!-- Husband Card -->
+        <div id="dropzone-husband" class="dropzone p-6 flex flex-col items-center justify-center min-h-[280px]">
+          <input type="file" id="input-husband" accept="image/*" class="hidden">
+          <div id="empty-husband" class="flex flex-col items-center text-center space-y-3">
+            <div class="w-16 h-16 rounded-2xl bg-indigo-500/15 text-indigo-400 flex items-center justify-center border border-indigo-500/25">
+              <i data-lucide="user" class="w-8 h-8"></i>
+            </div>
+            <div>
+              <p class="font-bold text-white font-display text-base">Husband's Face</p>
+              <p class="text-xs text-slate-400 mt-1 max-w-[220px]">Source portrait for male subject mapping</p>
+            </div>
+            <div class="inline-flex items-center gap-1.5 text-xs text-indigo-300 bg-indigo-500/10 px-3 py-1 rounded-full border border-indigo-500/20">
+              <i data-lucide="upload" class="w-3 h-3"></i> Click or Drag Image
+            </div>
+          </div>
+          <div id="preview-husband-box" class="hidden absolute inset-0 bg-void flex flex-col">
+            <img id="preview-husband-img" src="" alt="Husband Source" class="w-full h-full object-cover">
+            <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30 p-4 flex flex-col justify-between">
+              <div class="flex items-center justify-between">
+                <span class="px-2.5 py-1 rounded-md text-xs font-semibold bg-indigo-600/90 text-white backdrop-blur-md">
+                  Husband (Male)
+                </span>
+                <button type="button" onclick="clearFile('husband', event)" class="w-7 h-7 rounded-full bg-black/60 hover:bg-red-500/80 text-white flex items-center justify-center backdrop-blur-sm transition">
+                  <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+              </div>
+              <div class="text-xs text-slate-300 truncate" id="husband-filename">photo.jpg</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Wife Card -->
+        <div id="dropzone-wife" class="dropzone p-6 flex flex-col items-center justify-center min-h-[280px]">
+          <input type="file" id="input-wife" accept="image/*" class="hidden">
+          <div id="empty-wife" class="flex flex-col items-center text-center space-y-3">
+            <div class="w-16 h-16 rounded-2xl bg-pink-500/15 text-pink-400 flex items-center justify-center border border-pink-500/25">
+              <i data-lucide="heart" class="w-8 h-8"></i>
+            </div>
+            <div>
+              <p class="font-bold text-white font-display text-base">Wife's Face</p>
+              <p class="text-xs text-slate-400 mt-1 max-w-[220px]">Source portrait for female subject mapping</p>
+            </div>
+            <div class="inline-flex items-center gap-1.5 text-xs text-pink-300 bg-pink-500/10 px-3 py-1 rounded-full border border-pink-500/20">
+              <i data-lucide="upload" class="w-3 h-3"></i> Click or Drag Image
+            </div>
+          </div>
+          <div id="preview-wife-box" class="hidden absolute inset-0 bg-void flex flex-col">
+            <img id="preview-wife-img" src="" alt="Wife Source" class="w-full h-full object-cover">
+            <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30 p-4 flex flex-col justify-between">
+              <div class="flex items-center justify-between">
+                <span class="px-2.5 py-1 rounded-md text-xs font-semibold bg-pink-600/90 text-white backdrop-blur-md">
+                  Wife (Female)
+                </span>
+                <button type="button" onclick="clearFile('wife', event)" class="w-7 h-7 rounded-full bg-black/60 hover:bg-red-500/80 text-white flex items-center justify-center backdrop-blur-sm transition">
+                  <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+              </div>
+              <div class="text-xs text-slate-300 truncate" id="wife-filename">photo.jpg</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Target Couple Card -->
+        <div id="dropzone-target" class="dropzone p-6 flex flex-col items-center justify-center min-h-[280px]">
+          <input type="file" id="input-target" accept="image/*" class="hidden">
+          <div id="empty-target" class="flex flex-col items-center text-center space-y-3">
+            <div class="w-16 h-16 rounded-2xl bg-cyan-500/15 text-cyan-400 flex items-center justify-center border border-cyan-500/25">
+              <i data-lucide="image" class="w-8 h-8"></i>
+            </div>
+            <div>
+              <p class="font-bold text-white font-display text-base">Target Couple Photo</p>
+              <p class="text-xs text-slate-400 mt-1 max-w-[220px]">Reference image preserving pose, clothes, & scene</p>
+            </div>
+            <div class="inline-flex items-center gap-1.5 text-xs text-cyan-300 bg-cyan-500/10 px-3 py-1 rounded-full border border-cyan-500/20">
+              <i data-lucide="upload" class="w-3 h-3"></i> Click or Drag Image
+            </div>
+          </div>
+          <div id="preview-target-box" class="hidden absolute inset-0 bg-void flex flex-col">
+            <img id="preview-target-img" src="" alt="Target Couple" class="w-full h-full object-cover">
+            <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30 p-4 flex flex-col justify-between">
+              <div class="flex items-center justify-between">
+                <span class="px-2.5 py-1 rounded-md text-xs font-semibold bg-cyan-600/90 text-white backdrop-blur-md">
+                  Target Scene
+                </span>
+                <button type="button" onclick="clearFile('target', event)" class="w-7 h-7 rounded-full bg-black/60 hover:bg-red-500/80 text-white flex items-center justify-center backdrop-blur-sm transition">
+                  <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+              </div>
+              <div class="text-xs text-slate-300 truncate" id="target-filename">couple.jpg</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Controls & Pipeline Options -->
+    <section class="glass-card p-6 space-y-6">
+      <div class="flex items-center gap-2">
+        <i data-lucide="sliders" class="w-5 h-5 text-uv-start"></i>
+        <h3 class="text-lg font-bold font-display text-white">2. AI Pipeline Harmonization Controls</h3>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        
+        <!-- Toggle 1: Skin Tone -->
+        <div class="p-4 rounded-xl bg-indigo-500/5 border border-indigo-500/15 flex items-start gap-3">
+          <div class="w-10 h-10 rounded-xl bg-pink-500/15 text-pink-400 flex items-center justify-center shrink-0 mt-0.5">
+            <i data-lucide="palette" class="w-5 h-5"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center justify-between">
+              <span class="font-semibold text-sm text-white">Skin Tone Matching</span>
+              <div id="toggle-skintone" class="toggle-track active" onclick="toggleOption('skintone')">
+                <div class="toggle-thumb"></div>
+              </div>
+            </div>
+            <p class="text-xs text-slate-400 mt-1">Reinhard LAB color space normalization across natural lighting.</p>
+          </div>
+        </div>
+
+        <!-- Toggle 2: Body Proportions -->
+        <div class="p-4 rounded-xl bg-indigo-500/5 border border-indigo-500/15 flex items-start gap-3">
+          <div class="w-10 h-10 rounded-xl bg-uv-start/15 text-uv-glow flex items-center justify-center shrink-0 mt-0.5">
+            <i data-lucide="user-check" class="w-5 h-5"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center justify-between">
+              <span class="font-semibold text-sm text-white">Body Matching</span>
+              <div id="toggle-body" class="toggle-track active" onclick="toggleOption('body')">
+                <div class="toggle-thumb"></div>
+              </div>
+            </div>
+            <p class="text-xs text-slate-400 mt-1">Shoulder-to-waist calibration (matches slim 6ft, 62kg physics).</p>
+          </div>
+        </div>
+
+        <!-- Toggle 3: Lighting Harmonization -->
+        <div class="p-4 rounded-xl bg-indigo-500/5 border border-indigo-500/15 flex items-start gap-3">
+          <div class="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
+            <i data-lucide="sun-medium" class="w-5 h-5"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center justify-between">
+              <span class="font-semibold text-sm text-white">Lighting Match</span>
+              <div id="toggle-lighting" class="toggle-track active" onclick="toggleOption('lighting')">
+                <div class="toggle-thumb"></div>
+              </div>
+            </div>
+            <p class="text-xs text-slate-400 mt-1">HSV V-channel luminance & contrast match to the target scene.</p>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Prompting Option for Custom Changes & AI Refinements -->
+      <div class="border-t border-indigo-500/15 pt-5 space-y-3">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <div class="w-7 h-7 rounded-lg bg-pink-500/15 text-pink-400 flex items-center justify-center">
+              <i data-lucide="message-square-plus" class="w-4 h-4"></i>
+            </div>
+            <h4 class="font-bold text-sm font-display text-white">Prompt Instructions for Changes & Custom Stylization</h4>
+          </div>
+          <span class="text-[11px] text-slate-400">Describe desired mood, skin glow, lighting, or beard/face adjustments</span>
+        </div>
+
+        <div class="relative">
+          <textarea id="custom-prompt" rows="2" placeholder="e.g. 'Warm golden hour lighting, softer skin tone, enhance smile, clean beard edges, cinematic romantic mood, subtle radiant glow'..." class="w-full px-4 py-3 pr-16 rounded-xl bg-indigo-950/40 border border-indigo-500/25 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-uv-start focus:ring-1 focus:ring-uv-start resize-none transition"></textarea>
+          <button type="button" onclick="clearPrompt()" class="absolute top-3 right-3 text-xs text-slate-400 hover:text-white bg-indigo-500/10 hover:bg-indigo-500/20 px-2 py-1 rounded transition">Clear</button>
+        </div>
+
+        <!-- Quick Preset Prompt Chips -->
+        <div class="flex flex-wrap items-center gap-2 pt-0.5">
+          <span class="text-[11px] text-slate-500 font-medium mr-1 flex items-center gap-1">
+            <i data-lucide="sparkles" class="w-3 h-3 text-amber-400"></i> Quick Presets:
+          </span>
+          <button type="button" onclick="applyPresetPrompt('Warm golden hour lighting, enhance natural glow and skin radiance')" class="text-[11px] px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-300 hover:bg-amber-500/20 transition flex items-center gap-1">🌅 Golden Hour</button>
+          <button type="button" onclick="applyPresetPrompt('Fairer radiant skin tone, soft focus texture, smooth portrait lighting')" class="text-[11px] px-2.5 py-1 rounded-full bg-pink-500/10 border border-pink-500/25 text-pink-300 hover:bg-pink-500/20 transition flex items-center gap-1">✨ Radiant Glow</button>
+          <button type="button" onclick="applyPresetPrompt('Crisp ultra-HD details, clean sharp beard edges, realistic eye clarity')" class="text-[11px] px-2.5 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/25 text-cyan-300 hover:bg-cyan-500/20 transition flex items-center gap-1">🔍 Sharp HD Detail</button>
+          <button type="button" onclick="applyPresetPrompt('Soft romantic cinematic color grading, gentle shadows, warm embrace tone')" class="text-[11px] px-2.5 py-1 rounded-full bg-purple-500/10 border border-purple-500/25 text-purple-300 hover:bg-purple-500/20 transition flex items-center gap-1">💜 Romantic Cinema</button>
+          <button type="button" onclick="applyPresetPrompt('High-contrast editorial lighting, deep shadows, dramatic mood')" class="text-[11px] px-2.5 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/25 text-indigo-300 hover:bg-indigo-500/20 transition flex items-center gap-1">📸 Editorial Mood</button>
+          <button type="button" onclick="applyPresetPrompt('Rich vibrant colors, saturated clothing hues, vivid scenery')" class="text-[11px] px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 hover:bg-emerald-500/20 transition flex items-center gap-1">🎨 Vivid Colors</button>
+        </div>
+      </div>
+
+      <!-- Optional Gemini Vision Key -->
+      <div class="border-t border-indigo-500/10 pt-4">
+        <button type="button" onclick="toggleGeminiSection()" class="text-xs text-slate-400 hover:text-indigo-300 flex items-center gap-1.5 transition">
+          <i data-lucide="key-round" class="w-3.5 h-3.5 text-uv-glow"></i>
+          <span>Gemini Pro Vision Multimodal Semantic Quality Analyzer (Optional)</span>
+          <i id="gemini-chevron" data-lucide="chevron-down" class="w-3.5 h-3.5"></i>
+        </button>
+        <div id="gemini-input-container" class="hidden mt-3">
+          <div class="flex items-center gap-3">
+            <input type="password" id="gemini-api-key" placeholder="Paste Google Gemini API Key (e.g. AIzaSy...)" class="flex-1 px-4 py-2.5 rounded-xl bg-indigo-950/40 border border-indigo-500/25 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-uv-start">
+          </div>
+          <p class="text-[11px] text-slate-400 mt-1.5">When provided, Gemini 1.5 Pro performs multimodal quality grading and gives real-time lighting feedback.</p>
+        </div>
+      </div>
+
+      <!-- Action Button -->
+      <div class="text-center pt-2">
+        <button id="btn-execute" type="button" disabled onclick="executeCoupleSwap()" class="btn-gradient px-8 py-4 rounded-full font-display font-bold text-base text-white inline-flex items-center gap-3">
+          <i data-lucide="zap" class="w-5 h-5"></i>
+          <span>EXECUTE ANTIGRAVITY COUPLE SWAP</span>
+        </button>
+        <p id="execute-hint" class="text-xs text-slate-500 mt-2">Upload husband, wife, and target couple photos to begin</p>
+      </div>
+    </section>
+
+    <!-- Processing Overlay Modal -->
+    <div id="modal-processing" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+      <div class="glass-card max-w-md w-full p-8 text-center space-y-6">
+        <div class="flex justify-center">
+          <div class="w-20 h-20 rounded-full flex items-center justify-center relative">
+            <div class="spinner w-20 h-20 absolute inset-0"></div>
+            <i data-lucide="sparkles" class="w-8 h-8 text-uv-glow"></i>
+          </div>
+        </div>
+
+        <div>
+          <h4 class="text-2xl font-bold font-display text-white">Synthesizing Couple</h4>
+          <p class="text-xs text-slate-400 mt-1" id="process-subtitle">Executing neural alignment & color harmonization</p>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="space-y-1.5">
+          <div class="flex justify-between text-xs text-slate-400">
+            <span id="process-step-name">Analyzing facial landmarks...</span>
+            <span id="process-pct">35%</span>
+          </div>
+          <div class="w-full h-2 rounded-full bg-indigo-950 overflow-hidden">
+            <div id="process-bar" class="h-full shimmer-bar w-1/3 transition-all duration-300"></div>
+          </div>
+        </div>
+
+        <div class="space-y-2 text-left text-xs text-slate-300 pt-2 border-t border-indigo-500/15" id="process-steps-list">
+          <div class="flex items-center gap-2"><i data-lucide="check-circle" class="w-3.5 h-3.5 text-emerald-400"></i> Images secured and calibrated</div>
+          <div class="flex items-center gap-2"><i data-lucide="loader" class="w-3.5 h-3.5 text-uv-glow animate-spin"></i> Detecting husband & wife facial landmarks</div>
+          <div class="flex items-center gap-2 text-slate-500"><i data-lucide="circle" class="w-3.5 h-3.5"></i> Poisson blending & skin tone transfer</div>
+          <div class="flex items-center gap-2 text-slate-500"><i data-lucide="circle" class="w-3.5 h-3.5"></i> Torso proportion & lighting normalization</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Results Section -->
+    <section id="section-result" class="hidden space-y-6">
+      
+      <!-- Top banner -->
+      <div class="glass-card p-5 flex flex-col sm:flex-row items-center justify-between gap-4 border-emerald-500/30">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center shrink-0">
+            <i data-lucide="check-circle-2" class="w-7 h-7"></i>
+          </div>
+          <div>
+            <h3 class="text-lg font-bold font-display text-white">Couple Face Swap Succeeded!</h3>
+            <p class="text-xs text-slate-400" id="result-job-id">Job #antigravity — Zero-Distortion Applied</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-3 w-full sm:w-auto">
+          <a id="btn-download" href="#" download class="flex-1 sm:flex-none btn-gradient px-5 py-2.5 rounded-full text-xs font-bold text-white flex items-center justify-center gap-2">
+            <i data-lucide="download" class="w-4 h-4"></i> Download Result
+          </a>
+          <button type="button" onclick="resetStudio()" class="px-4 py-2.5 rounded-full border border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 text-slate-300 text-xs font-semibold flex items-center justify-center gap-1.5 transition">
+            <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> New Swap
+          </button>
+        </div>
+      </div>
+
+      <!-- Split-screen Before/After Slider -->
+      <div class="glass-card p-5 space-y-4">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <i data-lucide="split-square-vertical" class="w-5 h-5 text-uv-glow"></i>
+            <h4 class="text-base font-bold font-display text-white">Interactive Before / After Split Slider</h4>
+          </div>
+          <span class="text-xs text-slate-400">Drag handle horizontally or click anywhere on image</span>
+        </div>
+
+        <div id="slider-box" class="slider-container w-full h-[360px] sm:h-[560px]">
+          <!-- After (Processed) Image -->
+          <img id="img-after" src="" alt="After Swap" class="w-full h-full object-contain absolute inset-0 pointer-events-none">
+
+          <!-- Before (Original Target) Clip -->
+          <div id="slider-before-clip" class="absolute inset-0 overflow-hidden pointer-events-none" style="width: 50%;">
+            <img id="img-before" src="" alt="Before Swap" class="w-full h-full object-contain pointer-events-none" style="width: 100%; max-width: none;">
+          </div>
+
+          <!-- Slider Line & Handle -->
+          <div id="slider-handle" class="slider-handle" style="left: 50%;">
+            <div class="slider-button">
+              <i data-lucide="chevrons-left-right" class="w-4 h-4"></i>
+            </div>
+          </div>
+
+          <!-- Badges -->
+          <div class="absolute top-4 left-4 px-3 py-1 rounded-full text-xs font-bold bg-black/70 text-white backdrop-blur-md pointer-events-none">
+            Original Target
+          </div>
+          <div class="absolute top-4 right-4 px-3 py-1 rounded-full text-xs font-bold bg-indigo-600/90 text-white backdrop-blur-md pointer-events-none">
+            Antigravity Swap
+          </div>
+        </div>
+      </div>
+
+      <!-- Interactive Prompt-Based Refinement Box -->
+      <div class="glass-card p-5 space-y-3 border-uv-start/30 bg-gradient-to-r from-indigo-950/40 via-purple-950/20 to-transparent">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <i data-lucide="sparkles" class="w-4 h-4 text-plasma"></i>
+            <h4 class="text-sm font-bold font-display text-white">Refine & Apply Prompt Changes to This Swap</h4>
+          </div>
+          <span class="text-xs text-slate-400">Iterate on lighting, warmth, softness, or details instantly</span>
+        </div>
+        
+        <div class="flex flex-col sm:flex-row items-center gap-2.5">
+          <input type="text" id="refine-prompt-input" placeholder="Type prompt changes (e.g. 'Warm golden hour lighting, softer skin tone, sharpen beard details')..." class="flex-1 w-full px-4 py-2.5 rounded-xl bg-indigo-950/60 border border-indigo-500/30 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-uv-start">
+          <button type="button" onclick="refineCurrentResult()" class="w-full sm:w-auto px-5 py-2.5 rounded-xl btn-gradient text-xs font-bold text-white flex items-center justify-center gap-2 shrink-0">
+            <i data-lucide="wand-2" class="w-4 h-4"></i> Apply Changes
+          </button>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2 pt-1 text-xs">
+          <span class="text-slate-500 text-[11px]">Quick Tweaks:</span>
+          <button type="button" onclick="setRefinePrompt('Warm golden hour lighting, cozy amber glow')" class="text-[11px] px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20 hover:bg-amber-500/20">🌅 Warmer</button>
+          <button type="button" onclick="setRefinePrompt('Fairer radiant skin tone, soft focus texture')" class="text-[11px] px-2 py-0.5 rounded bg-pink-500/10 text-pink-300 border border-pink-500/20 hover:bg-pink-500/20">✨ Soft Skin</button>
+          <button type="button" onclick="setRefinePrompt('Crisp ultra-HD details, clean sharp beard edges')" class="text-[11px] px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 hover:bg-cyan-500/20">🔍 Sharpen</button>
+          <button type="button" onclick="setRefinePrompt('Cool cinematic atmosphere, deep rich tones')" class="text-[11px] px-2 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20 hover:bg-blue-500/20">❄️ Cool Moody</button>
+        </div>
+      </div>
+
+      <!-- Processing Log & Metadata -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+        
+        <div class="glass-card p-5 space-y-3">
+          <div class="flex items-center gap-2">
+            <i data-lucide="list-checks" class="w-4 h-4 text-emerald-400"></i>
+            <h5 class="text-sm font-bold font-display text-white">Pipeline Execution Steps</h5>
+          </div>
+          <div id="result-steps-container" class="space-y-1.5 text-xs text-slate-300">
+            <!-- Injected dynamically -->
+          </div>
+        </div>
+
+        <div class="glass-card p-5 space-y-3">
+          <div class="flex items-center gap-2">
+            <i data-lucide="cpu" class="w-4 h-4 text-cyanpulse"></i>
+            <h5 class="text-sm font-bold font-display text-white">Model & Engine Telemetry</h5>
+          </div>
+          <div id="result-meta-container" class="space-y-2 text-xs">
+            <!-- Injected dynamically -->
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Gemini Quality Assessment (if returned) -->
+      <div id="gemini-analysis-card" class="hidden glass-card p-5 space-y-2 border-indigo-500/40">
+        <div class="flex items-center gap-2">
+          <i data-lucide="bot" class="w-5 h-5 text-indigo-400"></i>
+          <h5 class="text-sm font-bold font-display text-white">Gemini Pro Vision Multimodal Quality Report</h5>
+        </div>
+        <p id="gemini-analysis-text" class="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap"></p>
+      </div>
+
+    </section>
+
+    <!-- Recent Gallery -->
+    <section class="glass-card p-6 space-y-4">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <i data-lucide="gallery-thumbnails" class="w-5 h-5 text-uv-glow"></i>
+          <h3 class="text-lg font-bold font-display text-white">Outputs & Studio Gallery</h3>
+        </div>
+        <button type="button" onclick="loadGallery()" class="text-xs text-indigo-300 hover:text-white flex items-center gap-1 transition">
+          <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Refresh
+        </button>
+      </div>
+
+      <div id="gallery-grid" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
+        <p class="col-span-full text-xs text-slate-500 text-center py-6">No outputs generated yet.</p>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="w-full border-t border-indigo-500/10 py-6 mt-12 bg-void/80 text-center text-xs text-slate-500">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+      <p>Antigravity AI Core — Autonomous Couple Face Swap & Body Matcher Studio</p>
+      <p class="text-slate-600">FastAPI • InsightFace • OpenCV Poisson Cloner • Gemini 1.5 Pro</p>
+    </div>
+  </footer>
+
+  <script>
+    // State
+    const files = {
+      husband: null,
+      wife: null,
+      target: null
+    };
+
+    const options = {
+      skintone: true,
+      body: true,
+      lighting: true,
+      invertedMapping: false
+    };
+
+    let targetObjectUrl = null;
+
+    // Initialize Lucide icons
+    document.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      setupDropzones();
+      setupSlider();
+      loadGallery();
+      checkHealth();
+
+      document.getElementById('btn-swap-mapping').addEventListener('click', () => {
+        options.invertedMapping = !options.invertedMapping;
+        const btn = document.getElementById('btn-swap-mapping');
+        if (options.invertedMapping) {
+          btn.classList.add('bg-indigo-600/40', 'border-indigo-400');
+          btn.querySelector('span').innerText = 'Inverted: Wife (Left) / Husband (Right)';
+        } else {
+          btn.classList.remove('bg-indigo-600/40', 'border-indigo-400');
+          btn.querySelector('span').innerText = 'Invert Husband / Wife Target Positions';
+        }
+      });
+    });
+
+    async function checkHealth() {
+      try {
+        const res = await fetch('/api/health');
+        if (res.ok) {
+          const data = await res.json();
+          const badge = document.getElementById('system-status-text');
+          badge.innerText = data.swapper_available ? 'InsightFace Neural Active' : 'Poisson Cloner Active';
+        }
+      } catch (e) {
+        document.getElementById('system-status-text').innerText = 'Backend Connected';
+      }
+    }
+
+    function setupDropzones() {
+      ['husband', 'wife', 'target'].forEach(key => {
+        const dz = document.getElementById(`dropzone-${key}`);
+        const input = document.getElementById(`input-${key}`);
+
+        dz.addEventListener('click', () => input.click());
+
+        input.addEventListener('change', (e) => {
+          if (e.target.files && e.target.files[0]) {
+            handleFileSelect(key, e.target.files[0]);
+          }
+        });
+
+        dz.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          dz.classList.add('drag-over');
+        });
+
+        dz.addEventListener('dragleave', () => {
+          dz.classList.remove('drag-over');
+        });
+
+        dz.addEventListener('drop', (e) => {
+          e.preventDefault();
+          dz.classList.remove('drag-over');
+          if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+            handleFileSelect(key, e.dataTransfer.files[0]);
+          }
+        });
+      });
+    }
+
+    function handleFileSelect(key, file) {
+      if (!file.type.startsWith('image/')) {
+        alert('Please select a valid image file (JPG, PNG, WebP).');
+        return;
+      }
+      files[key] = file;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = document.getElementById(`preview-${key}-img`);
+        img.src = e.target.result;
+        document.getElementById(`empty-${key}`).classList.add('hidden');
+        document.getElementById(`preview-${key}-box`).classList.remove('hidden');
+        document.getElementById(`${key}-filename`).innerText = file.name;
+        document.getElementById(`dropzone-${key}`).classList.add('has-file');
+
+        if (key === 'target') {
+          targetObjectUrl = e.target.result;
+        }
+
+        updateExecuteButton();
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function clearFile(key, event) {
+      if (event) event.stopPropagation();
+      files[key] = null;
+      document.getElementById(`input-${key}`).value = '';
+      document.getElementById(`preview-${key}-img`).src = '';
+      document.getElementById(`empty-${key}`).classList.remove('hidden');
+      document.getElementById(`preview-${key}-box`).classList.add('hidden');
+      document.getElementById(`dropzone-${key}`).classList.remove('has-file');
+      if (key === 'target') targetObjectUrl = null;
+      updateExecuteButton();
+    }
+
+    function updateExecuteButton() {
+      const ready = files.husband && files.wife && files.target;
+      const btn = document.getElementById('btn-execute');
+      const hint = document.getElementById('execute-hint');
+      btn.disabled = !ready;
+      if (ready) {
+        hint.innerText = 'Ready! Click to run the autonomous swap pipeline.';
+        hint.classList.add('text-emerald-400');
+        hint.classList.remove('text-slate-500');
+      } else {
+        hint.innerText = 'Upload husband, wife, and target couple photos to begin';
+        hint.classList.remove('text-emerald-400');
+        hint.classList.add('text-slate-500');
+      }
+    }
+
+    function toggleOption(key) {
+      options[key] = !options[key];
+      const el = document.getElementById(`toggle-${key}`);
+      if (options[key]) {
+        el.classList.add('active');
+      } else {
+        el.classList.remove('active');
+      }
+    }
+
+    function toggleGeminiSection() {
+      const c = document.getElementById('gemini-input-container');
+      c.classList.toggle('hidden');
+    }
+
+    let currentJobId = null;
+
+    function applyPresetPrompt(text) {
+      const el = document.getElementById('custom-prompt');
+      el.value = text;
+      el.focus();
+    }
+
+    function clearPrompt() {
+      document.getElementById('custom-prompt').value = '';
+    }
+
+    function setRefinePrompt(text) {
+      const el = document.getElementById('refine-prompt-input');
+      el.value = text;
+      el.focus();
+    }
+
+    // Pipeline Execution
+    async function executeCoupleSwap() {
+      if (!files.husband || !files.wife || !files.target) return;
+
+      const modal = document.getElementById('modal-processing');
+      modal.classList.remove('hidden');
+
+      // Progress animation
+      let pct = 15;
+      const bar = document.getElementById('process-bar');
+      const pctText = document.getElementById('process-pct');
+      const stepName = document.getElementById('process-step-name');
+
+      const progressTimer = setInterval(() => {
+        if (pct < 90) {
+          pct += Math.floor(Math.random() * 8) + 2;
+          bar.style.width = pct + '%';
+          pctText.innerText = pct + '%';
+
+          if (pct > 30 && pct < 50) stepName.innerText = 'Detecting facial landmarks & embeddings...';
+          else if (pct >= 50 && pct < 70) stepName.innerText = 'Mapping husband to male & wife to female...';
+          else if (pct >= 70 && pct < 85) stepName.innerText = 'Harmonizing LAB color space & skin tones...';
+          else if (pct >= 85) stepName.innerText = 'Calibrating proportions, prompts & lighting...';
+        }
+      }, 300);
+
+      const formData = new FormData();
+      // If inverted mapping is requested, swap the files sent as husband and wife
+      if (options.invertedMapping) {
+        formData.append('husband_face', files.wife);
+        formData.append('wife_face', files.husband);
+      } else {
+        formData.append('husband_face', files.husband);
+        formData.append('wife_face', files.wife);
+      }
+      formData.append('target_couple', files.target);
+      formData.append('skin_tone_matching', options.skintone);
+      formData.append('body_proportion_matching', options.body);
+      formData.append('lighting_harmonization', options.lighting);
+
+      const customPrompt = document.getElementById('custom-prompt').value.trim();
+      if (customPrompt) {
+        formData.append('custom_prompt', customPrompt);
+      }
+
+      const apiKey = document.getElementById('gemini-api-key').value.trim();
+      if (apiKey) {
+        formData.append('gemini_api_key', apiKey);
+      }
+
+      try {
+        const response = await fetch('/api/antigravity/execute-couple-swap', {
+          method: 'POST',
+          body: formData
+        });
+
+        clearInterval(progressTimer);
+
+        if (!response.ok) {
+          const err = await response.json();
+          throw new Error(err.detail || 'Execution failed on server');
+        }
+
+        const data = await response.json();
+
+        bar.style.width = '100%';
+        pctText.innerText = '100%';
+        stepName.innerText = 'Swap complete!';
+
+        setTimeout(() => {
+          modal.classList.add('hidden');
+          renderResult(data);
+          loadGallery();
+        }, 500);
+
+      } catch (err) {
+        clearInterval(progressTimer);
+        modal.classList.add('hidden');
+        alert('Face Swap Error: ' + err.message);
+      }
+    }
+
+    // Interactive Iterative Refinement
+    async function refineCurrentResult() {
+      if (!currentJobId) {
+        alert('Please run a face swap first before applying prompt refinements.');
+        return;
+      }
+      const promptInput = document.getElementById('refine-prompt-input');
+      const promptText = promptInput.value.trim();
+      if (!promptText) {
+        alert('Please enter a prompt instruction for the changes you want to apply.');
+        return;
+      }
+
+      const modal = document.getElementById('modal-processing');
+      modal.classList.remove('hidden');
+      document.getElementById('process-step-name').innerText = 'Applying prompt stylization & AI refinements...';
+      document.getElementById('process-pct').innerText = '60%';
+      document.getElementById('process-bar').style.width = '60%';
+
+      const formData = new FormData();
+      formData.append('job_id', currentJobId);
+      formData.append('custom_prompt', promptText);
+
+      const apiKey = document.getElementById('gemini-api-key').value.trim();
+      if (apiKey) {
+        formData.append('gemini_api_key', apiKey);
+      }
+
+      try {
+        const response = await fetch('/api/antigravity/refine-swap', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!response.ok) {
+          const err = await response.json();
+          throw new Error(err.detail || 'Refinement failed on server');
+        }
+
+        const data = await response.json();
+        document.getElementById('process-pct').innerText = '100%';
+        document.getElementById('process-bar').style.width = '100%';
+
+        setTimeout(() => {
+          modal.classList.add('hidden');
+          renderResult(data);
+          loadGallery();
+        }, 400);
+
+      } catch (err) {
+        modal.classList.add('hidden');
+        alert('Refinement Error: ' + err.message);
+      }
+    }
+
+    function renderResult(data) {
+      const section = document.getElementById('section-result');
+      section.classList.remove('hidden');
+      section.scrollIntoView({ behavior: 'smooth' });
+
+      currentJobId = data.job_id;
+      document.getElementById('result-job-id').innerText = `Job #${data.job_id} — ${data.execution_metadata.ai_engine}`;
+      document.getElementById('btn-download').href = data.download_url;
+
+      // Set images for slider
+      const imgAfter = document.getElementById('img-after');
+      const imgBefore = document.getElementById('img-before');
+
+      imgAfter.src = data.preview_url + '?t=' + Date.now();
+      imgBefore.src = targetObjectUrl || data.preview_url;
+
+      // Reset slider to 50%
+      setSliderPosition(50);
+
+      // Render steps
+      const stepsBox = document.getElementById('result-steps-container');
+      stepsBox.innerHTML = '';
+      (data.processing_steps || []).forEach(step => {
+        const d = document.createElement('div');
+        d.className = 'flex items-center gap-2';
+        const isOk = step.includes('✅') || step.includes('✨');
+        d.innerHTML = `<i data-lucide="${isOk ? 'check-circle' : 'alert-triangle'}" class="w-3.5 h-3.5 ${isOk ? 'text-emerald-400' : 'text-amber-400'} shrink-0"></i><span>${step.replace(/[✅⚠️✨]/g, '').trim()}</span>`;
+        stepsBox.appendChild(d);
+      });
+
+      // Render metadata
+      const metaBox = document.getElementById('result-meta-container');
+      const m = data.execution_metadata;
+      metaBox.innerHTML = `
+        <div class="flex justify-between border-b border-indigo-500/10 pb-1.5"><span class="text-slate-400">Husband Source:</span><span class="text-white font-medium">${m.husband_file || 'Current'}</span></div>
+        <div class="flex justify-between border-b border-indigo-500/10 pb-1.5"><span class="text-slate-400">Wife Source:</span><span class="text-white font-medium">${m.wife_file || 'Current'}</span></div>
+        <div class="flex justify-between border-b border-indigo-500/10 pb-1.5"><span class="text-slate-400">Target Scene:</span><span class="text-white font-medium">${m.target_file || 'Reference'}</span></div>
+        ${m.faces_detected ? `<div class="flex justify-between border-b border-indigo-500/10 pb-1.5"><span class="text-slate-400">Faces Found:</span><span class="text-emerald-400 font-medium">H: ${m.faces_detected.husband} | W: ${m.faces_detected.wife} | Target: ${m.faces_detected.target}</span></div>` : ''}
+        <div class="flex justify-between border-b border-indigo-500/10 pb-1.5"><span class="text-slate-400">Engine:</span><span class="text-uv-glow font-medium">${m.ai_engine}</span></div>
+        ${m.custom_prompt ? `<div class="flex justify-between border-b border-indigo-500/10 pb-1.5"><span class="text-slate-400">Prompt:</span><span class="text-pink-300 font-medium truncate ml-2 max-w-[200px]" title="${m.custom_prompt}">"${m.custom_prompt}"</span></div>` : ''}
+        ${m.prompt_modifications && m.prompt_modifications.length > 0 ? `<div class="flex justify-between"><span class="text-slate-400">Styles Applied:</span><span class="text-emerald-300 font-medium text-right text-[11px]">${m.prompt_modifications.join(', ')}</span></div>` : ''}
+      `;
+
+      // Gemini analysis card
+      const geminiCard = document.getElementById('gemini-analysis-card');
+      if (data.gemini_analysis) {
+        geminiCard.classList.remove('hidden');
+        document.getElementById('gemini-analysis-text').innerText = data.gemini_analysis;
+      } else {
+        geminiCard.classList.add('hidden');
+      }
+
+      lucide.createIcons();
+    }
+
+    // Before/After Slider Drag logic
+    function setupSlider() {
+      const container = document.getElementById('slider-box');
+      let isDragging = false;
+
+      function update(clientX) {
+        const rect = container.getBoundingClientRect();
+        const offsetX = clientX - rect.left;
+        let pct = (offsetX / rect.width) * 100;
+        pct = Math.max(0, Math.min(100, pct));
+        setSliderPosition(pct);
+      }
+
+      container.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        update(e.clientX);
+      });
+
+      window.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        update(e.clientX);
+      });
+
+      window.addEventListener('mouseup', () => {
+        isDragging = false;
+      });
+
+      // Touch events for mobile/tablet
+      container.addEventListener('touchstart', (e) => {
+        isDragging = true;
+        if (e.touches[0]) update(e.touches[0].clientX);
+      });
+
+      window.addEventListener('touchmove', (e) => {
+        if (!isDragging || !e.touches[0]) return;
+        update(e.touches[0].clientX);
+      });
+
+      window.addEventListener('touchend', () => {
+        isDragging = false;
+      });
+    }
+
+    function setSliderPosition(pct) {
+      document.getElementById('slider-before-clip').style.width = pct + '%';
+      document.getElementById('slider-handle').style.left = pct + '%';
+    }
+
+    function resetStudio() {
+      clearFile('husband');
+      clearFile('wife');
+      clearFile('target');
+      document.getElementById('section-result').classList.add('hidden');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // Gallery Loader
+    async function loadGallery() {
+      try {
+        const res = await fetch('/api/antigravity/gallery');
+        if (!res.ok) return;
+        const data = await res.json();
+        const grid = document.getElementById('gallery-grid');
+        if (!data.outputs || data.outputs.length === 0) {
+          grid.innerHTML = '<p class="col-span-full text-xs text-slate-500 text-center py-6">No outputs generated yet.</p>';
+          return;
+        }
+
+        grid.innerHTML = data.outputs.map(item => `
+          <div class="group relative rounded-xl overflow-hidden border border-indigo-500/20 bg-black aspect-square">
+            <img src="${item.preview_url}" alt="${item.filename}" class="w-full h-full object-cover transition duration-300 group-hover:scale-105">
+            <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition p-2 flex flex-col justify-end">
+              <span class="text-[10px] text-slate-300 truncate">${item.filename}</span>
+              <a href="${item.download_url}" download class="mt-1 text-[11px] text-center font-bold py-1 rounded bg-indigo-600 text-white hover:bg-indigo-500 transition">
+                Download
+              </a>
+            </div>
+          </div>
+        `).join('');
+      } catch (e) {
+        console.error('Gallery fetch error:', e);
+      }
+    }
+  </script>
+</body>
+</html>

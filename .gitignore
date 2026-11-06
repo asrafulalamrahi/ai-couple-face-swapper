@@ -1,0 +1,70 @@
+# Dependencies
+node_modules/
+*/node_modules/
+package-lock.json
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Python
+__pycache__/
+*/__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# Build and distribution
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# Environment, secrets, and credentials
+.env
+.env.*
+*.env
+*.pem
+*.key
+*.cert
+credentials.json
+client_secrets.json
+
+# Storage & Large binary files (uploads, generated outputs, neural model weights >100MB)
+backend/antigravity_storage/uploads/*
+!backend/antigravity_storage/uploads/.gitkeep
+backend/antigravity_storage/outputs/*
+!backend/antigravity_storage/outputs/.gitkeep
+backend/antigravity_storage/models/*
+!backend/antigravity_storage/models/.gitkeep
+
+*.onnx
+*.zip
+*.tar.gz
+*.bin
+*.pt
+*.pth
+*.h5
+
+# Logs & temp files
+*.log
+logs/
+temp/
+tmp/
+
+# OS and IDE files
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+*.swo
+*.local
