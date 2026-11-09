@@ -700,10 +700,28 @@
         if (res.ok) {
           const data = await res.json();
           const badge = document.getElementById('system-status-text');
-          badge.innerText = data.swapper_available ? 'InsightFace Neural Active' : 'Poisson Cloner Active';
+          let statusText = data.swapper_available ? 'InsightFace Neural Active' : 'Poisson Cloner Active';
+          if (data.google_drive_connected) {
+            statusText += ' • ☁️ Google Drive Storage';
+          }
+          badge.innerText = statusText;
+        } else {
+          const badge = document.getElementById('system-status-text');
+          if (badge) badge.innerText = 'Backend Offline (Deploy as Web Service)';
+          const dot = document.getElementById('system-status-dot');
+          if (dot) {
+            dot.classList.remove('bg-emerald-400');
+            dot.classList.add('bg-rose-500');
+          }
         }
       } catch (e) {
-        document.getElementById('system-status-text').innerText = 'Backend Connected';
+        const badge = document.getElementById('system-status-text');
+        if (badge) badge.innerText = 'Backend Offline (Requires Web Service)';
+        const dot = document.getElementById('system-status-dot');
+        if (dot) {
+          dot.classList.remove('bg-emerald-400');
+          dot.classList.add('bg-rose-500');
+        }
       }
     }
 
@@ -884,8 +902,18 @@
         clearInterval(progressTimer);
 
         if (!response.ok) {
-          const err = await response.json();
-          throw new Error(err.detail || 'Execution failed on server');
+          let errMsg = `Server error ${response.status}`;
+          try {
+            const err = await response.json();
+            if (err && err.detail) errMsg = err.detail;
+          } catch (_) {
+            const txt = await response.text().catch(() => '');
+            if (txt) errMsg += `: ${txt.slice(0, 120)}`;
+          }
+          if (response.status === 404) {
+            errMsg += ' (The backend Python service is not running. On Render, this project must be deployed as a "Web Service", not a "Static Site".)';
+          }
+          throw new Error(errMsg);
         }
 
         const data = await response.json();
@@ -942,8 +970,15 @@
         });
 
         if (!response.ok) {
-          const err = await response.json();
-          throw new Error(err.detail || 'Refinement failed on server');
+          let errMsg = `Server error ${response.status}`;
+          try {
+            const err = await response.json();
+            if (err && err.detail) errMsg = err.detail;
+          } catch (_) {
+            const txt = await response.text().catch(() => '');
+            if (txt) errMsg += `: ${txt.slice(0, 120)}`;
+          }
+          throw new Error(errMsg);
         }
 
         const data = await response.json();
@@ -1086,18 +1121,38 @@
         }
 
         grid.innerHTML = data.outputs.map(item => `
-          <div class="group relative rounded-xl overflow-hidden border border-indigo-500/20 bg-black aspect-square">
+          <div id="gallery-card-${item.filename}" class="group relative rounded-xl overflow-hidden border border-indigo-500/20 bg-black aspect-square">
             <img src="${item.preview_url}" alt="${item.filename}" class="w-full h-full object-cover transition duration-300 group-hover:scale-105">
             <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition p-2 flex flex-col justify-end">
               <span class="text-[10px] text-slate-300 truncate">${item.filename}</span>
-              <a href="${item.download_url}" download class="mt-1 text-[11px] text-center font-bold py-1 rounded bg-indigo-600 text-white hover:bg-indigo-500 transition">
-                Download
-              </a>
+              <div class="flex gap-1 mt-1">
+                <a href="${item.download_url}" download class="flex-1 text-[11px] text-center font-bold py-1 rounded bg-indigo-600 text-white hover:bg-indigo-500 transition">
+                  Download
+                </a>
+                <button onclick="deleteGalleryImage('${item.filename}')" class="px-2 text-[11px] font-bold py-1 rounded bg-rose-600/80 text-white hover:bg-rose-600 transition" title="Delete Image">
+                  ✕
+                </button>
+              </div>
             </div>
           </div>
         `).join('');
       } catch (e) {
         console.error('Gallery fetch error:', e);
+      }
+    }
+
+    async function deleteGalleryImage(identifier) {
+      if (!confirm(`Delete image ${identifier}?`)) return;
+      try {
+        const res = await fetch(`/api/antigravity/delete/${encodeURIComponent(identifier)}`, { method: 'DELETE' });
+        if (res.ok) {
+          loadGallery();
+        } else {
+          alert('Failed to delete image.');
+        }
+      } catch (err) {
+        console.error('Delete error:', err);
+        alert('Network error while deleting image.');
       }
     }
   </script>

@@ -53,6 +53,11 @@ backend/antigravity_storage/models/*
 *.pth
 *.h5
 
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
 # Logs & temp files
 *.log
 logs/

@@ -7,3 +7,5 @@ insightface==0.7.3
 onnxruntime==1.19.2
 Pillow==10.4.0
 google-generativeai==0.8.1
+requests>=2.31.0
+google-auth>=2.23.0

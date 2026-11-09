@@ -80,7 +80,7 @@ npm run dev
 ```
 The Vite dev server proxies API calls (`/api`, `/outputs`) to the backend running on port 8000.
 
-### 3. Deploying to Render
+### 3. Deploying to Render with Persistent Google Drive Storage
 
 This repository includes native Render configuration files (`render.yaml` and `.python-version`):
 
@@ -91,17 +91,38 @@ This repository includes native Render configuration files (`render.yaml` and `.
 - **Environment Variables**:
   - `PYTHON_VERSION`: `3.11.9`
   - `PORT`: Automatically assigned by Render
+  - `GOOGLE_DRIVE_CLIENT_ID`: Your Google OAuth 2.0 Web Client ID
+  - `GOOGLE_DRIVE_CLIENT_SECRET`: Your Google OAuth 2.0 Client Secret
+  - `GOOGLE_DRIVE_REFRESH_TOKEN`: Your OAuth 2.0 Refresh Token with Drive access
+  - `GOOGLE_DRIVE_FOLDER_ID`: The folder ID of your root Google Drive folder (e.g., `AI-Couple-Face-Swapper`)
   - `GEMINI_API_KEY`: *(Optional)* For Gemini Pro Vision multimodal quality assessment
+
+---
+
+## ☁️ Google Drive Architecture
+
+When configured, images bypass ephemeral container disk storage and persist in Google Drive with the following structure:
+```text
+AI-Couple-Face-Swapper/
+  ├── Original-Uploads/    # Source portraits uploaded by users
+  ├── Generated-Images/    # High-resolution AI-swapped portraits
+  ├── User-Images/         # User profile portraits & assets
+  └── Backups/             # Archive & fallback storage
+```
+- **Privacy First**: Files are never set to public or world-readable; access is authenticated and proxied securely via backend streaming endpoints (`/outputs/{filename}` and `/api/antigravity/download/{filename}`).
+- **Crash/Restart Resilient**: Cold container restarts query Google Drive metadata (`appProperties`) to immediately rebuild the SQLite gallery and history index without data loss.
 
 ---
 
 ## 🔌 API Endpoints
 
-- `GET /api/health` — Checks engine readiness, active backend mode, and model availability.
-- `POST /api/antigravity/execute-couple-swap` — Executes couple face swap with skin tone harmonization and proportion matching.
-- `POST /api/antigravity/refine-swap` — Applies prompt-guided enhancements to a previously generated image.
-- `GET /api/antigravity/gallery` — Returns history of generated results.
-- `GET /api/antigravity/download/{filename}` — Downloads the high-resolution output.
+- `GET /api/health` — Checks engine readiness, active backend mode, and Google Drive connection status.
+- `POST /api/antigravity/execute-couple-swap` — Executes couple face swap, synchronizes images directly to Google Drive, and records metadata.
+- `POST /api/antigravity/refine-swap` — Applies prompt-guided enhancements (retrieves previous output from Google Drive if necessary).
+- `GET /api/antigravity/gallery` — Returns history of generated results from SQLite and Google Drive.
+- `GET /outputs/{filename}` — Streams image directly from local cache or Google Drive.
+- `GET /api/antigravity/download/{filename}` — Secure authenticated download of high-resolution image.
+- `DELETE /api/antigravity/delete/{identifier}` — Deletes an image from local disk, Google Drive, and database.
 
 ---
 

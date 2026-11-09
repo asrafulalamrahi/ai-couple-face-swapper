@@ -22,9 +22,35 @@ from typing import Optional, List, Tuple
 import cv2
 import numpy as np
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+
+# Database & Google Drive Storage Integration
+try:
+    from backend.database import (
+        init_db,
+        record_image,
+        record_job,
+        get_image_by_filename,
+        get_image_by_drive_id,
+        list_gallery_images,
+        mark_image_deleted,
+        sync_drive_file_metadata,
+    )
+    from backend.google_drive_storage import drive_storage
+except ImportError:
+    from database import (
+        init_db,
+        record_image,
+        record_job,
+        get_image_by_filename,
+        get_image_by_drive_id,
+        list_gallery_images,
+        mark_image_deleted,
+        sync_drive_file_metadata,
+    )
+    from google_drive_storage import drive_storage
 
 # Logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -34,7 +60,7 @@ logger = logging.getLogger("antigravity")
 app = FastAPI(
     title="Antigravity AI - Couple Face Swap & Body Matcher Studio",
     version="4.0.0",
-    description="Autonomous production-grade couple face swapping and body proportion matching engine.",
+    description="Autonomous production-grade couple face swapping and body proportion matching engine with Google Drive persistent cloud storage.",
 )
 
 app.add_middleware(
@@ -57,11 +83,38 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 MODEL_DIR.mkdir(parents=True, exist_ok=True)
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
 
-# Mount static and outputs
+# Mount static web studio
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-app.mount("/outputs", StaticFiles(directory=str(OUTPUT_DIR)), name="outputs")
+
+@app.on_event("startup")
+async def startup_event():
+    """Initializes SQLite metadata tables and verifies Google Drive cloud structure."""
+    try:
+        init_db()
+        if drive_storage.is_configured():
+            logger.info("Initializing Google Drive cloud storage folder hierarchy...")
+            folders = drive_storage.ensure_folder_structure()
+            logger.info(f"Google Drive folders ready: {list(folders.keys())}")
+            # Background sync generated images to SQLite for restart recovery
+            try:
+                drive_files = drive_storage.list_files_in_folder("Generated-Images")
+                for f in drive_files:
+                    sync_drive_file_metadata(
+                        drive_file_id=f["id"],
+                        filename=f.get("name", ""),
+                        folder_name="Generated-Images",
+                        image_role="generated_output",
+                        file_size=int(f.get("size", 0)),
+                    )
+                logger.info(f"Re-indexed {len(drive_files)} images from Google Drive to local database.")
+            except Exception as e:
+                logger.warning(f"Google Drive background sync note: {e}")
+        else:
+            logger.info("Google Drive storage credentials not set. Running with local storage engine.")
+    except Exception as e:
+        logger.error(f"Startup initialization error: {e}", exc_info=True)
 
 
 # ──────────────────────────────────────────────
@@ -428,14 +481,55 @@ async def root():
 
 @app.get("/api/health")
 async def health_check():
-    """Health and engine status."""
+    """Health, engine status, and persistent cloud storage status."""
     face_engine._ensure_initialized()
+    drive_ready = drive_storage.is_configured()
     return {
         "status": "healthy",
-        "version": "4.0.0",
+        "version": "4.1.0",
         "engine": "InsightFace" if face_engine._swapper is not None else "OpenCV Poisson Cloner",
         "swapper_available": face_engine._swapper is not None,
+        "storage": "Google Drive v3 (Connected)" if drive_ready else "Local Filesystem (Ephemeral)",
+        "google_drive_connected": drive_ready,
+        "google_drive_folders": drive_storage._folder_cache if drive_ready else {},
     }
+
+
+@app.get("/outputs/{filename}")
+async def get_output_media(filename: str):
+    """
+    Serves output images. Checks local disk cache first; if missing (e.g. after Render restart),
+    securely streams the image directly from private Google Drive storage.
+    """
+    file_path = OUTPUT_DIR / filename
+    if file_path.exists():
+        return FileResponse(str(file_path), media_type="image/jpeg")
+
+    # Search in database or Google Drive
+    rec = get_image_by_filename(filename)
+    drive_id = rec.get("drive_file_id") if rec else None
+
+    if not drive_id and drive_storage.is_configured():
+        files = drive_storage.list_files_in_folder("Generated-Images")
+        for f in files:
+            if f.get("name") == filename:
+                drive_id = f.get("id")
+                break
+
+    if drive_id and drive_storage.is_configured():
+        try:
+            return StreamingResponse(
+                drive_storage.stream_file_content(drive_id),
+                media_type="image/jpeg",
+                headers={
+                    "Cache-Control": "public, max-age=86400",
+                    "Content-Disposition": f'inline; filename="{filename}"',
+                },
+            )
+        except Exception as e:
+            logger.error(f"Error streaming {filename} from Google Drive: {e}")
+
+    raise HTTPException(status_code=404, detail="Image not found")
 
 
 @app.post("/api/antigravity/execute-couple-swap")
@@ -448,19 +542,35 @@ async def execute_couple_swap(
     lighting_harmonization: bool = Form(True),
     custom_prompt: Optional[str] = Form(None, description="Natural language prompt for custom changes and stylization"),
     gemini_api_key: Optional[str] = Form(None),
+    user_id: Optional[str] = Form("anonymous"),
 ):
     """
     Executes couple face swap with explicit husband/wife mapping,
     LAB skin tone normalization, and body proportion calibration.
+    Syncs original uploads and generated images to Google Drive persistent storage.
     """
     job_id = str(uuid.uuid4())[:8]
-    logger.info(f"[{job_id}] Processing couple face swap request...")
+    logger.info(f"[{job_id}] Processing couple face swap request for user '{user_id}'...")
+
+    # File validation
+    ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+    for f_obj in (husband_face, wife_face, target_couple):
+        ext = Path(f_obj.filename).suffix.lower()
+        if ext not in ALLOWED_EXTENSIONS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported format '{ext}' in {f_obj.filename}. Allowed formats: JPG, JPEG, PNG, WEBP.",
+            )
 
     try:
         # 1. Save uploads
-        h_path = UPLOAD_DIR / f"{job_id}_husband_{husband_face.filename}"
-        w_path = UPLOAD_DIR / f"{job_id}_wife_{wife_face.filename}"
-        t_path = UPLOAD_DIR / f"{job_id}_target_{target_couple.filename}"
+        h_filename = f"{job_id}_husband_{husband_face.filename}"
+        w_filename = f"{job_id}_wife_{wife_face.filename}"
+        t_filename = f"{job_id}_target_{target_couple.filename}"
+
+        h_path = UPLOAD_DIR / h_filename
+        w_path = UPLOAD_DIR / w_filename
+        t_path = UPLOAD_DIR / t_filename
 
         with open(h_path, "wb") as f:
             shutil.copyfileobj(husband_face.file, f)
@@ -581,6 +691,82 @@ async def execute_couple_swap(
         output_path = OUTPUT_DIR / output_filename
         cv2.imwrite(str(output_path), result_img, [cv2.IMWRITE_JPEG_QUALITY, 95])
 
+        # 8. Google Drive Persistent Cloud Upload & Database Synchronization
+        h_drive_id = None
+        w_drive_id = None
+        t_drive_id = None
+        out_drive_id = None
+
+        if drive_storage.is_configured():
+            try:
+                # Upload original source files to 'Original-Uploads'
+                h_res = drive_storage.upload_file(
+                    h_path, h_filename, folder_name="Original-Uploads",
+                    user_id=user_id, job_id=job_id, image_role="husband_source"
+                )
+                h_drive_id = h_res.get("file_id")
+                record_image(user_id=user_id, image_role="husband_source", filename=h_filename,
+                             drive_file_id=h_drive_id, drive_folder="Original-Uploads",
+                             job_id=job_id, file_size=h_path.stat().st_size)
+
+                w_res = drive_storage.upload_file(
+                    w_path, w_filename, folder_name="Original-Uploads",
+                    user_id=user_id, job_id=job_id, image_role="wife_source"
+                )
+                w_drive_id = w_res.get("file_id")
+                record_image(user_id=user_id, image_role="wife_source", filename=w_filename,
+                             drive_file_id=w_drive_id, drive_folder="Original-Uploads",
+                             job_id=job_id, file_size=w_path.stat().st_size)
+
+                t_res = drive_storage.upload_file(
+                    t_path, t_filename, folder_name="Original-Uploads",
+                    user_id=user_id, job_id=job_id, image_role="target_source"
+                )
+                t_drive_id = t_res.get("file_id")
+                record_image(user_id=user_id, image_role="target_source", filename=t_filename,
+                             drive_file_id=t_drive_id, drive_folder="Original-Uploads",
+                             job_id=job_id, file_size=t_path.stat().st_size)
+
+                # Upload generated output to 'Generated-Images'
+                out_res = drive_storage.upload_file(
+                    output_path, output_filename, folder_name="Generated-Images",
+                    user_id=user_id, job_id=job_id, image_role="generated_output"
+                )
+                out_drive_id = out_res.get("file_id")
+                record_image(user_id=user_id, image_role="generated_output", filename=output_filename,
+                             drive_file_id=out_drive_id, drive_folder="Generated-Images",
+                             job_id=job_id, file_size=output_path.stat().st_size)
+
+                processing_steps.append("☁️ Securely synced images to Google Drive persistent cloud storage")
+
+                # Clean temporary original uploads to keep Render container filesystem clean
+                for tmp_f in (h_path, w_path, t_path):
+                    try:
+                        tmp_f.unlink(missing_ok=True)
+                    except Exception:
+                        pass
+
+            except Exception as e:
+                logger.error(f"Google Drive sync note: {e}", exc_info=True)
+                processing_steps.append(f"⚠️ Google Drive sync note: {e}")
+        else:
+            record_image(user_id=user_id, image_role="husband_source", filename=h_filename, job_id=job_id)
+            record_image(user_id=user_id, image_role="wife_source", filename=w_filename, job_id=job_id)
+            record_image(user_id=user_id, image_role="target_source", filename=t_filename, job_id=job_id)
+            record_image(user_id=user_id, image_role="generated_output", filename=output_filename, job_id=job_id)
+
+        record_job(
+            job_id=job_id,
+            user_id=user_id,
+            status="success",
+            output_filename=output_filename,
+            husband_drive_id=h_drive_id,
+            wife_drive_id=w_drive_id,
+            target_drive_id=t_drive_id,
+            output_drive_id=out_drive_id,
+            metadata={"custom_prompt": custom_prompt, "steps": processing_steps},
+        )
+
         logger.info(f"[{job_id}] Face swap complete. Output: {output_filename}")
 
         return JSONResponse(
@@ -590,6 +776,7 @@ async def execute_couple_swap(
                 "message": "Antigravity AI successfully executed couple face swap and body matching!",
                 "download_url": f"/api/antigravity/download/{output_filename}",
                 "preview_url": f"/outputs/{output_filename}",
+                "drive_file_id": out_drive_id,
                 "processing_steps": processing_steps,
                 "gemini_analysis": gemini_analysis,
                 "execution_metadata": {
@@ -598,6 +785,7 @@ async def execute_couple_swap(
                     "target_file": target_couple.filename,
                     "custom_prompt": custom_prompt,
                     "prompt_modifications": prompt_tags,
+                    "cloud_storage": "Google Drive" if out_drive_id else "Local Filesystem",
                     "faces_detected": {
                         "husband": len(h_faces),
                         "wife": len(w_faces),
@@ -627,20 +815,34 @@ async def refine_swap(
     job_id: str = Form(..., description="Previous job ID to refine"),
     custom_prompt: str = Form(..., description="Prompt instructions for custom changes and stylization"),
     gemini_api_key: Optional[str] = Form(None),
+    user_id: Optional[str] = Form("anonymous"),
 ):
     """
     Rapid iterative refinement endpoint:
-    Applies custom prompt stylization and adjustments to an existing output image
-    without requiring re-uploading all 3 source files.
+    Applies custom prompt stylization and adjustments to an existing output image.
+    Supports persistent Google Drive image retrieval if container was restarted.
     """
     output_filename = f"antigravity_result_{job_id}.jpg"
     output_path = OUTPUT_DIR / output_filename
-    if not output_path.exists():
-        raise HTTPException(status_code=404, detail="Original job output not found.")
 
-    img = cv2.imread(str(output_path))
+    img = None
+    if output_path.exists():
+        img = cv2.imread(str(output_path))
+    elif drive_storage.is_configured():
+        rec = get_image_by_filename(output_filename)
+        drive_id = rec.get("drive_file_id") if rec else None
+        if not drive_id:
+            files = drive_storage.list_files_in_folder("Generated-Images")
+            for f in files:
+                if f.get("name") == output_filename:
+                    drive_id = f.get("id")
+                    break
+        if drive_id:
+            raw_bytes = drive_storage.download_bytes(drive_id)
+            img = cv2.imdecode(np.frombuffer(raw_bytes, np.uint8), cv2.IMREAD_COLOR)
+
     if img is None:
-        raise HTTPException(status_code=400, detail="Could not read original job image.")
+        raise HTTPException(status_code=404, detail="Original job output image not found.")
 
     refined_img, prompt_tags = apply_prompt_stylization(img, custom_prompt)
 
@@ -649,6 +851,22 @@ async def refine_swap(
     new_filename = f"antigravity_result_{new_job_id}.jpg"
     new_path = OUTPUT_DIR / new_filename
     cv2.imwrite(str(new_path), refined_img, [cv2.IMWRITE_JPEG_QUALITY, 95])
+
+    new_drive_id = None
+    if drive_storage.is_configured():
+        try:
+            out_res = drive_storage.upload_file(
+                new_path, new_filename, folder_name="Generated-Images",
+                user_id=user_id, job_id=new_job_id, image_role="refined_output"
+            )
+            new_drive_id = out_res.get("file_id")
+            record_image(user_id=user_id, image_role="refined_output", filename=new_filename,
+                         drive_file_id=new_drive_id, drive_folder="Generated-Images",
+                         job_id=new_job_id, file_size=new_path.stat().st_size)
+        except Exception as e:
+            logger.warning(f"Could not upload refined output to Google Drive: {e}")
+    else:
+        record_image(user_id=user_id, image_role="refined_output", filename=new_filename, job_id=new_job_id)
 
     gemini_feedback = None
     if gemini_api_key and gemini_api_key.strip():
@@ -676,6 +894,7 @@ async def refine_swap(
             "message": "Antigravity AI successfully applied prompt-guided refinements!",
             "download_url": f"/api/antigravity/download/{new_filename}",
             "preview_url": f"/outputs/{new_filename}",
+            "drive_file_id": new_drive_id,
             "processing_steps": steps,
             "gemini_analysis": gemini_feedback,
             "execution_metadata": {
@@ -690,7 +909,7 @@ async def refine_swap(
 
 @app.get("/api/antigravity/download/{filename}")
 async def download_output(filename: str):
-    """Download output image."""
+    """Download output image, with persistent Google Drive streaming fallback."""
     file_path = OUTPUT_DIR / filename
     if file_path.exists():
         return FileResponse(
@@ -699,21 +918,108 @@ async def download_output(filename: str):
             filename=filename,
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
+
+    # Fallback to Google Drive
+    rec = get_image_by_filename(filename)
+    drive_id = rec.get("drive_file_id") if rec else None
+    if not drive_id and drive_storage.is_configured():
+        files = drive_storage.list_files_in_folder("Generated-Images")
+        for f in files:
+            if f.get("name") == filename:
+                drive_id = f.get("id")
+                break
+
+    if drive_id and drive_storage.is_configured():
+        return StreamingResponse(
+            drive_storage.stream_file_content(drive_id),
+            media_type="image/jpeg",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
     raise HTTPException(status_code=404, detail="File not found")
 
 
 @app.get("/api/antigravity/gallery")
 async def gallery():
-    """Lists generated results."""
+    """Lists generated results from SQLite database, Google Drive, and local cache."""
+    seen_names = set()
     items = []
-    for f in sorted(OUTPUT_DIR.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
-        if f.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp"):
-            items.append({
-                "filename": f.name,
-                "preview_url": f"/outputs/{f.name}",
-                "download_url": f"/api/antigravity/download/{f.name}",
-            })
+
+    # 1. Query SQLite database
+    db_items = list_gallery_images()
+    for row in db_items:
+        fname = row["filename"]
+        seen_names.add(fname)
+        items.append({
+            "filename": fname,
+            "preview_url": f"/outputs/{fname}",
+            "download_url": f"/api/antigravity/download/{fname}",
+            "drive_id": row.get("drive_file_id"),
+            "created_at": row.get("created_at"),
+        })
+
+    # 2. Query Google Drive folder directly if DB is empty (e.g. fresh Render container restart)
+    if not items and drive_storage.is_configured():
+        try:
+            drive_files = drive_storage.list_files_in_folder("Generated-Images")
+            for f in drive_files:
+                fname = f.get("name")
+                if fname and fname not in seen_names:
+                    seen_names.add(fname)
+                    sync_drive_file_metadata(
+                        drive_file_id=f["id"],
+                        filename=fname,
+                        folder_name="Generated-Images",
+                        image_role="generated_output",
+                        file_size=int(f.get("size", 0)),
+                    )
+                    items.append({
+                        "filename": fname,
+                        "preview_url": f"/outputs/{fname}",
+                        "download_url": f"/api/antigravity/download/{fname}",
+                        "drive_id": f.get("id"),
+                    })
+        except Exception as e:
+            logger.warning(f"Could not load gallery from Google Drive: {e}")
+
+    # 3. Include local files if any
+    if OUTPUT_DIR.exists():
+        for f in sorted(OUTPUT_DIR.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
+            if f.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp") and f.name not in seen_names:
+                seen_names.add(f.name)
+                items.append({
+                    "filename": f.name,
+                    "preview_url": f"/outputs/{f.name}",
+                    "download_url": f"/api/antigravity/download/{f.name}",
+                })
+
     return {"outputs": items, "count": len(items)}
+
+
+@app.delete("/api/antigravity/delete/{identifier}")
+async def delete_image_endpoint(identifier: str):
+    """Deletes an image from local storage, Google Drive, and database."""
+    # 1. Local delete
+    local_path = OUTPUT_DIR / identifier
+    if local_path.exists():
+        try:
+            local_path.unlink()
+        except Exception as e:
+            logger.warning(f"Local file delete error: {e}")
+
+    # 2. Google Drive delete
+    rec = get_image_by_filename(identifier) or get_image_by_drive_id(identifier)
+    drive_id = rec.get("drive_file_id") if rec else identifier
+
+    if drive_storage.is_configured() and drive_id:
+        try:
+            drive_storage.delete_file(drive_id)
+        except Exception as e:
+            logger.warning(f"Google Drive delete error: {e}")
+
+    # 3. Mark deleted in database
+    mark_image_deleted(identifier)
+    return {"status": "success", "message": f"Image {identifier} successfully deleted."}
 
 
 if __name__ == "__main__":
