@@ -496,7 +496,14 @@ async def root():
     """Serves the main Antigravity Face Swap Studio frontend."""
     index_file = STATIC_DIR / "index.html"
     if index_file.exists():
-        return FileResponse(str(index_file))
+        return FileResponse(
+            str(index_file),
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            },
+        )
     return JSONResponse(
         content={
             "app": "Antigravity AI - Couple Face Swap Studio",
@@ -522,7 +529,7 @@ async def health_check():
     }
 
 
-@app.get("/outputs/{filename}")
+@app.api_route("/outputs/{filename}", methods=["GET", "HEAD"])
 async def get_output_media(filename: str):
     """
     Serves output images. Checks local disk cache first; if missing (e.g. after Render restart),
@@ -930,7 +937,7 @@ async def refine_swap(
     )
 
 
-@app.get("/api/antigravity/download/{filename}")
+@app.api_route("/api/antigravity/download/{filename}", methods=["GET", "HEAD"])
 async def download_output(filename: str):
     """Download output image, with persistent Google Drive streaming fallback."""
     file_path = OUTPUT_DIR / filename
@@ -962,7 +969,7 @@ async def download_output(filename: str):
     raise HTTPException(status_code=404, detail="File not found")
 
 
-@app.get("/api/antigravity/gallery")
+@app.api_route("/api/antigravity/gallery", methods=["GET", "HEAD"])
 async def gallery():
     """Lists generated results from SQLite database, Google Drive, and local cache."""
     seen_names = set()
