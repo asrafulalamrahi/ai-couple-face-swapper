@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: ai-couple-face-swapper
+    runtime: python
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: python backend/antigravity_master_backend.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9

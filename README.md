@@ -80,6 +80,19 @@ npm run dev
 ```
 The Vite dev server proxies API calls (`/api`, `/outputs`) to the backend running on port 8000.
 
+### 3. Deploying to Render
+
+This repository includes native Render configuration files (`render.yaml` and `.python-version`):
+
+- **Service Type**: Web Service
+- **Runtime**: Python 3 (Python 3.11.9)
+- **Build Command**: `pip install -r requirements.txt`
+- **Start Command**: `python backend/antigravity_master_backend.py`
+- **Environment Variables**:
+  - `PYTHON_VERSION`: `3.11.9`
+  - `PORT`: Automatically assigned by Render
+  - `GEMINI_API_KEY`: *(Optional)* For Gemini Pro Vision multimodal quality assessment
+
 ---
 
 ## 🔌 API Endpoints
@@ -95,3 +108,4 @@ The Vite dev server proxies API calls (`/api`, `/outputs`) to the backend runnin
 ## 🛡️ License
 
 MIT License
+
