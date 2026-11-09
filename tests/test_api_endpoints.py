@@ -11,6 +11,7 @@ from backend.antigravity_master_backend import (
     get_output_media,
     download_output,
     delete_image_endpoint,
+    resize_image_for_memory,
     OUTPUT_DIR,
 )
 import numpy as np
@@ -48,6 +49,14 @@ class TestApiRouteHandlers(unittest.TestCase):
         del_resp = asyncio.run(delete_image_endpoint(test_file))
         self.assertEqual(del_resp["status"], "success")
         self.assertFalse(test_path.exists())
+
+    def test_resize_image_for_memory(self):
+        # Create a large 2000x3000 mock image
+        large_img = np.zeros((3000, 2000, 3), dtype=np.uint8)
+        resized = resize_image_for_memory(large_img, max_dim=1280)
+        h, w = resized.shape[:2]
+        self.assertEqual(max(h, w), 1280)
+        self.assertLess(h * w, 3000 * 2000)
 
 
 if __name__ == "__main__":

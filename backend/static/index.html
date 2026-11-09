@@ -657,6 +657,68 @@
   </footer>
 
   <script>
+    /**
+     * Safely executes a fetch request, parsing JSON if available,
+     * and extracting descriptive error messages for empty/non-JSON responses.
+     */
+    async function safeFetchJson(url, options = {}) {
+      let response;
+      try {
+        response = await fetch(url, options);
+      } catch (networkErr) {
+        throw new Error(`Network failure or CORS block: ${networkErr.message}`);
+      }
+
+      // 1. Read raw response text (safe even if body is empty or HTML)
+      const rawText = await response.text();
+
+      // 2. Safely attempt JSON parsing
+      let json = null;
+      if (rawText && rawText.trim().length > 0) {
+        try {
+          json = JSON.parse(rawText);
+        } catch (_) {
+          json = null; // Plain text or HTML error page
+        }
+      }
+
+      // 3. HTTP status error handling (e.g. 404, 502, 504)
+      if (!response.ok) {
+        let errorDetail = '';
+
+        if (json && json.detail) {
+          errorDetail = typeof json.detail === 'string' ? json.detail : JSON.stringify(json.detail);
+        } else if (rawText && rawText.length < 300 && !rawText.includes('<!DOCTYPE')) {
+          errorDetail = rawText.trim();
+        } else {
+          switch (response.status) {
+            case 404:
+              errorDetail = 'Endpoint not found (Verify your backend is running as a Web Service on Render, not a Static Site).';
+              break;
+            case 413:
+              errorDetail = 'Uploaded images are too large. Please compress your photos.';
+              break;
+            case 502:
+              errorDetail = 'Bad Gateway: The Python server crashed or ran out of memory (OOM / Exit 137).';
+              break;
+            case 504:
+              errorDetail = 'Gateway Timeout: Face processing took longer than Render\'s 100-second limit.';
+              break;
+            default:
+              errorDetail = `Server returned HTTP ${response.status} (${response.statusText || 'Error'})`;
+          }
+        }
+
+        throw new Error(errorDetail);
+      }
+
+      if (json === null) {
+        throw new Error('Server returned an empty or non-JSON success response.');
+      }
+
+      return json;
+    }
+
     // State
     const files = {
       husband: null,
@@ -696,27 +758,21 @@
 
     async function checkHealth() {
       try {
-        const res = await fetch('/api/health');
-        if (res.ok) {
-          const data = await res.json();
-          const badge = document.getElementById('system-status-text');
-          let statusText = data.swapper_available ? 'InsightFace Neural Active' : 'Poisson Cloner Active';
-          if (data.google_drive_connected) {
-            statusText += ' • ☁️ Google Drive Storage';
-          }
-          badge.innerText = statusText;
-        } else {
-          const badge = document.getElementById('system-status-text');
-          if (badge) badge.innerText = 'Backend Offline (Deploy as Web Service)';
-          const dot = document.getElementById('system-status-dot');
-          if (dot) {
-            dot.classList.remove('bg-emerald-400');
-            dot.classList.add('bg-rose-500');
-          }
+        const data = await safeFetchJson('/api/health');
+        const badge = document.getElementById('system-status-text');
+        let statusText = data.swapper_available ? 'InsightFace Neural Active' : 'Poisson Cloner Active';
+        if (data.google_drive_connected) {
+          statusText += ' • ☁️ Google Drive Storage';
+        }
+        if (badge) badge.innerText = statusText;
+        const dot = document.getElementById('system-status-dot');
+        if (dot) {
+          dot.classList.remove('bg-rose-500');
+          dot.classList.add('bg-emerald-400');
         }
       } catch (e) {
         const badge = document.getElementById('system-status-text');
-        if (badge) badge.innerText = 'Backend Offline (Requires Web Service)';
+        if (badge) badge.innerText = 'Backend Offline (Deploy as Web Service)';
         const dot = document.getElementById('system-status-dot');
         if (dot) {
           dot.classList.remove('bg-emerald-400');
@@ -894,29 +950,12 @@
       }
 
       try {
-        const response = await fetch('/api/antigravity/execute-couple-swap', {
+        const data = await safeFetchJson('/api/antigravity/execute-couple-swap', {
           method: 'POST',
           body: formData
         });
 
         clearInterval(progressTimer);
-
-        if (!response.ok) {
-          let errMsg = `Server error ${response.status}`;
-          try {
-            const err = await response.json();
-            if (err && err.detail) errMsg = err.detail;
-          } catch (_) {
-            const txt = await response.text().catch(() => '');
-            if (txt) errMsg += `: ${txt.slice(0, 120)}`;
-          }
-          if (response.status === 404) {
-            errMsg += ' (The backend Python service is not running. On Render, this project must be deployed as a "Web Service", not a "Static Site".)';
-          }
-          throw new Error(errMsg);
-        }
-
-        const data = await response.json();
 
         bar.style.width = '100%';
         pctText.innerText = '100%';
@@ -964,24 +1003,11 @@
       }
 
       try {
-        const response = await fetch('/api/antigravity/refine-swap', {
+        const data = await safeFetchJson('/api/antigravity/refine-swap', {
           method: 'POST',
           body: formData
         });
 
-        if (!response.ok) {
-          let errMsg = `Server error ${response.status}`;
-          try {
-            const err = await response.json();
-            if (err && err.detail) errMsg = err.detail;
-          } catch (_) {
-            const txt = await response.text().catch(() => '');
-            if (txt) errMsg += `: ${txt.slice(0, 120)}`;
-          }
-          throw new Error(errMsg);
-        }
-
-        const data = await response.json();
         document.getElementById('process-pct').innerText = '100%';
         document.getElementById('process-bar').style.width = '100%';
 
@@ -992,6 +1018,9 @@
         }, 400);
 
       } catch (err) {
+        modal.classList.add('hidden');
+        alert('Refinement Error: ' + err.message);
+      }
         modal.classList.add('hidden');
         alert('Refinement Error: ' + err.message);
       }
@@ -1111,9 +1140,7 @@
     // Gallery Loader
     async function loadGallery() {
       try {
-        const res = await fetch('/api/antigravity/gallery');
-        if (!res.ok) return;
-        const data = await res.json();
+        const data = await safeFetchJson('/api/antigravity/gallery');
         const grid = document.getElementById('gallery-grid');
         if (!data.outputs || data.outputs.length === 0) {
           grid.innerHTML = '<p class="col-span-full text-xs text-slate-500 text-center py-6">No outputs generated yet.</p>';
@@ -1144,15 +1171,11 @@
     async function deleteGalleryImage(identifier) {
       if (!confirm(`Delete image ${identifier}?`)) return;
       try {
-        const res = await fetch(`/api/antigravity/delete/${encodeURIComponent(identifier)}`, { method: 'DELETE' });
-        if (res.ok) {
-          loadGallery();
-        } else {
-          alert('Failed to delete image.');
-        }
+        await safeFetchJson(`/api/antigravity/delete/${encodeURIComponent(identifier)}`, { method: 'DELETE' });
+        loadGallery();
       } catch (err) {
         console.error('Delete error:', err);
-        alert('Network error while deleting image.');
+        alert('Delete error: ' + err.message);
       }
     }
   </script>

@@ -325,6 +325,32 @@ face_engine = FaceSwapEngine()
 # Image Processing Harmonization Utilities
 # ──────────────────────────────────────────────
 
+def resize_image_for_memory(image_path_or_bytes, max_dim=1280) -> np.ndarray:
+    """
+    Clamps high-res phone images to max_dim (e.g., 1280px) 
+    to prevent RAM exhaustion (OOM / SIGKILL / Exit Code 137) on Render Free Tier (512MB RAM).
+    """
+    if isinstance(image_path_or_bytes, (bytes, bytearray)):
+        nparr = np.frombuffer(image_path_or_bytes, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    elif isinstance(image_path_or_bytes, np.ndarray):
+        img = image_path_or_bytes
+    else:
+        img = cv2.imread(str(image_path_or_bytes))
+
+    if img is None:
+        raise ValueError("Invalid image input or format could not be decoded.")
+
+    h, w = img.shape[:2]
+    if max(h, w) > max_dim:
+        scale = max_dim / float(max(h, w))
+        new_w = int(w * scale)
+        new_h = int(h * scale)
+        img = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
+
+    return img
+
+
 def apply_skin_tone_transfer(source_img: np.ndarray, target_img: np.ndarray) -> np.ndarray:
     """
     Reinhard Color Transfer in LAB color space:
@@ -579,17 +605,13 @@ async def execute_couple_swap(
         with open(t_path, "wb") as f:
             shutil.copyfileobj(target_couple.file, f)
 
-        # 2. Read images
-        husband_img = cv2.imread(str(h_path))
-        wife_img = cv2.imread(str(w_path))
-        target_img = cv2.imread(str(t_path))
-
-        if husband_img is None:
-            raise HTTPException(status_code=400, detail="Could not decode husband image.")
-        if wife_img is None:
-            raise HTTPException(status_code=400, detail="Could not decode wife image.")
-        if target_img is None:
-            raise HTTPException(status_code=400, detail="Could not decode target couple image.")
+        # 2. Read and memory-optimize images (prevents Render 512MB RAM OOM / SIGKILL)
+        try:
+            husband_img = resize_image_for_memory(h_path, max_dim=1280)
+            wife_img = resize_image_for_memory(w_path, max_dim=1280)
+            target_img = resize_image_for_memory(t_path, max_dim=1280)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Could not decode or resize input image: {e}")
 
         result_img = target_img.copy()
         processing_steps = []
@@ -827,7 +849,7 @@ async def refine_swap(
 
     img = None
     if output_path.exists():
-        img = cv2.imread(str(output_path))
+        img = resize_image_for_memory(output_path, max_dim=1280)
     elif drive_storage.is_configured():
         rec = get_image_by_filename(output_filename)
         drive_id = rec.get("drive_file_id") if rec else None
@@ -839,7 +861,7 @@ async def refine_swap(
                     break
         if drive_id:
             raw_bytes = drive_storage.download_bytes(drive_id)
-            img = cv2.imdecode(np.frombuffer(raw_bytes, np.uint8), cv2.IMREAD_COLOR)
+            img = resize_image_for_memory(raw_bytes, max_dim=1280)
 
     if img is None:
         raise HTTPException(status_code=404, detail="Original job output image not found.")
