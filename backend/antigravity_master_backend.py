@@ -328,18 +328,30 @@ face_engine = FaceSwapEngine()
 
 def resize_image_for_memory(image_path_or_bytes, max_dim=1280) -> np.ndarray:
     """
-    Clamps high-res phone images to max_dim (e.g., 1280px) 
-    to prevent RAM exhaustion (OOM / SIGKILL / Exit Code 137) on Render Free Tier (512MB RAM).
+    Clamps high-res phone images to max_dim (e.g., 1280px) and normalizes EXIF orientation
+    (prevents sideways/upside-down phone camera photos and prevents Render 512MB RAM OOM / SIGKILL).
     """
-    if isinstance(image_path_or_bytes, (bytes, bytearray)):
-        nparr = np.frombuffer(image_path_or_bytes, np.uint8)
-        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-    elif isinstance(image_path_or_bytes, np.ndarray):
+    img = None
+    if isinstance(image_path_or_bytes, np.ndarray):
         img = image_path_or_bytes
     else:
-        img = cv2.imread(str(image_path_or_bytes))
+        # Load with PIL first to properly handle EXIF orientation from mobile phone cameras
+        try:
+            from PIL import Image, ImageOps
+            if isinstance(image_path_or_bytes, (bytes, bytearray)):
+                pil_img = Image.open(io.BytesIO(image_path_or_bytes))
+            else:
+                pil_img = Image.open(str(image_path_or_bytes))
+            pil_img = ImageOps.exif_transpose(pil_img).convert("RGB")
+            img = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
+        except Exception:
+            if isinstance(image_path_or_bytes, (bytes, bytearray)):
+                nparr = np.frombuffer(image_path_or_bytes, np.uint8)
+                img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            else:
+                img = cv2.imread(str(image_path_or_bytes))
 
-    if img is None:
+    if img is None or img.size == 0:
         raise ValueError("Invalid image input or format could not be decoded.")
 
     h, w = img.shape[:2]
@@ -586,14 +598,14 @@ async def execute_couple_swap(
     job_id = str(uuid.uuid4())[:8]
     logger.info(f"[{job_id}] Processing couple face swap request for user '{user_id}'...")
 
-    # File validation
-    ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+    # File validation (supports mobile camera outputs and common phone formats)
+    ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".jfif", ".bmp", ".avif"}
     for f_obj in (husband_face, wife_face, target_couple):
         ext = Path(f_obj.filename).suffix.lower()
         if ext not in ALLOWED_EXTENSIONS:
             raise HTTPException(
                 status_code=400,
-                detail=f"Unsupported format '{ext}' in {f_obj.filename}. Allowed formats: JPG, JPEG, PNG, WEBP.",
+                detail=f"Unsupported format '{ext}' in {f_obj.filename}. Allowed formats: JPG, JPEG, PNG, WEBP, BMP, AVIF.",
             )
 
     try:

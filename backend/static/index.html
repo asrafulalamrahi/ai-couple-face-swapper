@@ -249,87 +249,152 @@
       </p>
     </div>
 
-    <!-- Upload Grid (3 Dropzones) -->
+    <!-- Upload Grid (3 Dropzones with Phone Camera & Gallery Support) -->
     <section>
-      <div class="flex items-center justify-between mb-4">
+      <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
         <div class="flex items-center gap-2">
           <i data-lucide="layers" class="w-5 h-5 text-indigo-400"></i>
           <h3 class="text-lg font-bold font-display text-white">1. Source & Reference Photos</h3>
+          <span class="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            <i data-lucide="smartphone" class="w-3 h-3"></i> Phone & Camera Ready
+          </span>
         </div>
         <button id="btn-swap-mapping" type="button" class="text-xs px-3 py-1.5 rounded-lg border border-indigo-500/30 bg-indigo-500/10 text-indigo-300 hover:bg-indigo-500/20 flex items-center gap-1.5 transition">
           <i data-lucide="arrow-left-right" class="w-3.5 h-3.5"></i>
-          <span>Invert Husband / Wife Target Positions</span>
+          <span>Invert Husband / Wife Positions</span>
         </button>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
         
         <!-- Husband Card -->
-        <div id="dropzone-husband" class="dropzone p-6 flex flex-col items-center justify-center min-h-[280px]">
-          <input type="file" id="input-husband" accept="image/*" class="hidden">
-          <div id="empty-husband" class="flex flex-col items-center text-center space-y-3">
+        <div id="dropzone-husband" class="dropzone p-6 flex flex-col items-center justify-center min-h-[300px]">
+          <!-- Standard Gallery Input -->
+          <input type="file" id="input-husband" accept="image/jpeg,image/png,image/webp,image/*" class="hidden">
+          <!-- Mobile Direct Front Camera Input -->
+          <input type="file" id="camera-husband" accept="image/jpeg,image/png,image/webp,image/*" capture="user" class="hidden">
+
+          <div id="empty-husband" class="flex flex-col items-center text-center space-y-3 w-full">
             <div class="w-16 h-16 rounded-2xl bg-indigo-500/15 text-indigo-400 flex items-center justify-center border border-indigo-500/25">
               <i data-lucide="user" class="w-8 h-8"></i>
             </div>
             <div>
               <p class="font-bold text-white font-display text-base">Husband's Face</p>
-              <p class="text-xs text-slate-400 mt-1 max-w-[220px]">Source portrait for male subject mapping</p>
+              <p class="text-xs text-slate-400 mt-1 max-w-[220px]">Selfie or portrait for male subject mapping</p>
             </div>
-            <div class="inline-flex items-center gap-1.5 text-xs text-indigo-300 bg-indigo-500/10 px-3 py-1 rounded-full border border-indigo-500/20">
-              <i data-lucide="upload" class="w-3 h-3"></i> Click or Drag Image
+            
+            <!-- Mobile & Desktop Dual Action Buttons -->
+            <div class="flex items-center gap-2 pt-1 w-full max-w-[260px]">
+              <button type="button" onclick="triggerUpload('husband', 'gallery', event)" class="flex-1 py-2 px-3 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 text-xs font-semibold text-white flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition">
+                <i data-lucide="image" class="w-3.5 h-3.5 text-indigo-300"></i>
+                <span>Gallery</span>
+              </button>
+              <button type="button" onclick="triggerUpload('husband', 'camera', event)" class="flex-1 py-2 px-3 rounded-xl bg-violet-600/30 hover:bg-violet-600/50 border border-violet-500/40 text-xs font-semibold text-white flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition">
+                <i data-lucide="camera" class="w-3.5 h-3.5 text-violet-300"></i>
+                <span>Camera</span>
+              </button>
             </div>
+            <p class="text-[11px] text-slate-500">or tap card / drag photo</p>
           </div>
+
+          <!-- Preview State -->
           <div id="preview-husband-box" class="hidden absolute inset-0 bg-void flex flex-col">
             <img id="preview-husband-img" src="" alt="Husband Source" class="w-full h-full object-cover">
-            <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30 p-4 flex flex-col justify-between">
+            <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-black/60 p-3.5 flex flex-col justify-between">
               <div class="flex items-center justify-between">
-                <span class="px-2.5 py-1 rounded-md text-xs font-semibold bg-indigo-600/90 text-white backdrop-blur-md">
-                  Husband (Male)
+                <span class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-600/90 text-white backdrop-blur-md shadow-md flex items-center gap-1">
+                  <i data-lucide="check" class="w-3 h-3 text-emerald-300"></i> Husband (Male)
                 </span>
-                <button type="button" onclick="clearFile('husband', event)" class="w-7 h-7 rounded-full bg-black/60 hover:bg-red-500/80 text-white flex items-center justify-center backdrop-blur-sm transition">
+                <button type="button" onclick="clearFile('husband', event)" title="Remove photo" class="w-8 h-8 rounded-full bg-black/75 hover:bg-rose-600 text-white flex items-center justify-center backdrop-blur-md border border-white/20 active:scale-90 transition">
                   <i data-lucide="x" class="w-4 h-4"></i>
                 </button>
               </div>
-              <div class="text-xs text-slate-300 truncate" id="husband-filename">photo.jpg</div>
+              <div class="space-y-1.5">
+                <div class="flex items-center justify-between text-[11px] text-slate-300 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-lg border border-white/10">
+                  <span class="truncate max-w-[150px]" id="husband-filename">photo.jpg</span>
+                  <span class="text-indigo-300 font-mono text-[10px]" id="husband-filesize">Ready</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                  <button type="button" onclick="triggerUpload('husband', 'gallery', event)" class="flex-1 py-1.5 px-2 rounded-lg bg-white/15 hover:bg-white/25 backdrop-blur-md text-[11px] font-semibold text-white flex items-center justify-center gap-1 transition">
+                    <i data-lucide="image" class="w-3 h-3"></i> Gallery
+                  </button>
+                  <button type="button" onclick="triggerUpload('husband', 'camera', event)" class="flex-1 py-1.5 px-2 rounded-lg bg-indigo-600/60 hover:bg-indigo-600/80 backdrop-blur-md text-[11px] font-semibold text-white flex items-center justify-center gap-1 transition">
+                    <i data-lucide="camera" class="w-3 h-3"></i> Retake
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
         <!-- Wife Card -->
-        <div id="dropzone-wife" class="dropzone p-6 flex flex-col items-center justify-center min-h-[280px]">
-          <input type="file" id="input-wife" accept="image/*" class="hidden">
-          <div id="empty-wife" class="flex flex-col items-center text-center space-y-3">
+        <div id="dropzone-wife" class="dropzone p-6 flex flex-col items-center justify-center min-h-[300px]">
+          <!-- Standard Gallery Input -->
+          <input type="file" id="input-wife" accept="image/jpeg,image/png,image/webp,image/*" class="hidden">
+          <!-- Mobile Direct Front Camera Input -->
+          <input type="file" id="camera-wife" accept="image/jpeg,image/png,image/webp,image/*" capture="user" class="hidden">
+
+          <div id="empty-wife" class="flex flex-col items-center text-center space-y-3 w-full">
             <div class="w-16 h-16 rounded-2xl bg-pink-500/15 text-pink-400 flex items-center justify-center border border-pink-500/25">
               <i data-lucide="heart" class="w-8 h-8"></i>
             </div>
             <div>
               <p class="font-bold text-white font-display text-base">Wife's Face</p>
-              <p class="text-xs text-slate-400 mt-1 max-w-[220px]">Source portrait for female subject mapping</p>
+              <p class="text-xs text-slate-400 mt-1 max-w-[220px]">Selfie or portrait for female subject mapping</p>
             </div>
-            <div class="inline-flex items-center gap-1.5 text-xs text-pink-300 bg-pink-500/10 px-3 py-1 rounded-full border border-pink-500/20">
-              <i data-lucide="upload" class="w-3 h-3"></i> Click or Drag Image
+
+            <!-- Mobile & Desktop Dual Action Buttons -->
+            <div class="flex items-center gap-2 pt-1 w-full max-w-[260px]">
+              <button type="button" onclick="triggerUpload('wife', 'gallery', event)" class="flex-1 py-2 px-3 rounded-xl bg-pink-600/30 hover:bg-pink-600/50 border border-pink-500/40 text-xs font-semibold text-white flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition">
+                <i data-lucide="image" class="w-3.5 h-3.5 text-pink-300"></i>
+                <span>Gallery</span>
+              </button>
+              <button type="button" onclick="triggerUpload('wife', 'camera', event)" class="flex-1 py-2 px-3 rounded-xl bg-rose-600/30 hover:bg-rose-600/50 border border-rose-500/40 text-xs font-semibold text-white flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition">
+                <i data-lucide="camera" class="w-3.5 h-3.5 text-rose-300"></i>
+                <span>Camera</span>
+              </button>
             </div>
+            <p class="text-[11px] text-slate-500">or tap card / drag photo</p>
           </div>
+
+          <!-- Preview State -->
           <div id="preview-wife-box" class="hidden absolute inset-0 bg-void flex flex-col">
             <img id="preview-wife-img" src="" alt="Wife Source" class="w-full h-full object-cover">
-            <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30 p-4 flex flex-col justify-between">
+            <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-black/60 p-3.5 flex flex-col justify-between">
               <div class="flex items-center justify-between">
-                <span class="px-2.5 py-1 rounded-md text-xs font-semibold bg-pink-600/90 text-white backdrop-blur-md">
-                  Wife (Female)
+                <span class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-pink-600/90 text-white backdrop-blur-md shadow-md flex items-center gap-1">
+                  <i data-lucide="check" class="w-3 h-3 text-emerald-300"></i> Wife (Female)
                 </span>
-                <button type="button" onclick="clearFile('wife', event)" class="w-7 h-7 rounded-full bg-black/60 hover:bg-red-500/80 text-white flex items-center justify-center backdrop-blur-sm transition">
+                <button type="button" onclick="clearFile('wife', event)" title="Remove photo" class="w-8 h-8 rounded-full bg-black/75 hover:bg-rose-600 text-white flex items-center justify-center backdrop-blur-md border border-white/20 active:scale-90 transition">
                   <i data-lucide="x" class="w-4 h-4"></i>
                 </button>
               </div>
-              <div class="text-xs text-slate-300 truncate" id="wife-filename">photo.jpg</div>
+              <div class="space-y-1.5">
+                <div class="flex items-center justify-between text-[11px] text-slate-300 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-lg border border-white/10">
+                  <span class="truncate max-w-[150px]" id="wife-filename">photo.jpg</span>
+                  <span class="text-pink-300 font-mono text-[10px]" id="wife-filesize">Ready</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                  <button type="button" onclick="triggerUpload('wife', 'gallery', event)" class="flex-1 py-1.5 px-2 rounded-lg bg-white/15 hover:bg-white/25 backdrop-blur-md text-[11px] font-semibold text-white flex items-center justify-center gap-1 transition">
+                    <i data-lucide="image" class="w-3 h-3"></i> Gallery
+                  </button>
+                  <button type="button" onclick="triggerUpload('wife', 'camera', event)" class="flex-1 py-1.5 px-2 rounded-lg bg-pink-600/60 hover:bg-pink-600/80 backdrop-blur-md text-[11px] font-semibold text-white flex items-center justify-center gap-1 transition">
+                    <i data-lucide="camera" class="w-3 h-3"></i> Retake
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
         <!-- Target Couple Card -->
-        <div id="dropzone-target" class="dropzone p-6 flex flex-col items-center justify-center min-h-[280px]">
-          <input type="file" id="input-target" accept="image/*" class="hidden">
-          <div id="empty-target" class="flex flex-col items-center text-center space-y-3">
+        <div id="dropzone-target" class="dropzone p-6 flex flex-col items-center justify-center min-h-[300px]">
+          <!-- Standard Gallery Input -->
+          <input type="file" id="input-target" accept="image/jpeg,image/png,image/webp,image/*" class="hidden">
+          <!-- Mobile Direct Rear Camera Input -->
+          <input type="file" id="camera-target" accept="image/jpeg,image/png,image/webp,image/*" capture="environment" class="hidden">
+
+          <div id="empty-target" class="flex flex-col items-center text-center space-y-3 w-full">
             <div class="w-16 h-16 rounded-2xl bg-cyan-500/15 text-cyan-400 flex items-center justify-center border border-cyan-500/25">
               <i data-lucide="image" class="w-8 h-8"></i>
             </div>
@@ -337,22 +402,47 @@
               <p class="font-bold text-white font-display text-base">Target Couple Photo</p>
               <p class="text-xs text-slate-400 mt-1 max-w-[220px]">Reference image preserving pose, clothes, & scene</p>
             </div>
-            <div class="inline-flex items-center gap-1.5 text-xs text-cyan-300 bg-cyan-500/10 px-3 py-1 rounded-full border border-cyan-500/20">
-              <i data-lucide="upload" class="w-3 h-3"></i> Click or Drag Image
+
+            <!-- Mobile & Desktop Dual Action Buttons -->
+            <div class="flex items-center gap-2 pt-1 w-full max-w-[260px]">
+              <button type="button" onclick="triggerUpload('target', 'gallery', event)" class="flex-1 py-2 px-3 rounded-xl bg-cyan-600/30 hover:bg-cyan-600/50 border border-cyan-500/40 text-xs font-semibold text-white flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition">
+                <i data-lucide="image" class="w-3.5 h-3.5 text-cyan-300"></i>
+                <span>Gallery</span>
+              </button>
+              <button type="button" onclick="triggerUpload('target', 'camera', event)" class="flex-1 py-2 px-3 rounded-xl bg-teal-600/30 hover:bg-teal-600/50 border border-teal-500/40 text-xs font-semibold text-white flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition">
+                <i data-lucide="camera" class="w-3.5 h-3.5 text-teal-300"></i>
+                <span>Camera</span>
+              </button>
             </div>
+            <p class="text-[11px] text-slate-500">or tap card / drag photo</p>
           </div>
+
+          <!-- Preview State -->
           <div id="preview-target-box" class="hidden absolute inset-0 bg-void flex flex-col">
             <img id="preview-target-img" src="" alt="Target Couple" class="w-full h-full object-cover">
-            <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30 p-4 flex flex-col justify-between">
+            <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-black/60 p-3.5 flex flex-col justify-between">
               <div class="flex items-center justify-between">
-                <span class="px-2.5 py-1 rounded-md text-xs font-semibold bg-cyan-600/90 text-white backdrop-blur-md">
-                  Target Scene
+                <span class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-cyan-600/90 text-white backdrop-blur-md shadow-md flex items-center gap-1">
+                  <i data-lucide="check" class="w-3 h-3 text-emerald-300"></i> Target Scene
                 </span>
-                <button type="button" onclick="clearFile('target', event)" class="w-7 h-7 rounded-full bg-black/60 hover:bg-red-500/80 text-white flex items-center justify-center backdrop-blur-sm transition">
+                <button type="button" onclick="clearFile('target', event)" title="Remove photo" class="w-8 h-8 rounded-full bg-black/75 hover:bg-rose-600 text-white flex items-center justify-center backdrop-blur-md border border-white/20 active:scale-90 transition">
                   <i data-lucide="x" class="w-4 h-4"></i>
                 </button>
               </div>
-              <div class="text-xs text-slate-300 truncate" id="target-filename">couple.jpg</div>
+              <div class="space-y-1.5">
+                <div class="flex items-center justify-between text-[11px] text-slate-300 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-lg border border-white/10">
+                  <span class="truncate max-w-[150px]" id="target-filename">couple.jpg</span>
+                  <span class="text-cyan-300 font-mono text-[10px]" id="target-filesize">Ready</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                  <button type="button" onclick="triggerUpload('target', 'gallery', event)" class="flex-1 py-1.5 px-2 rounded-lg bg-white/15 hover:bg-white/25 backdrop-blur-md text-[11px] font-semibold text-white flex items-center justify-center gap-1 transition">
+                    <i data-lucide="image" class="w-3 h-3"></i> Gallery
+                  </button>
+                  <button type="button" onclick="triggerUpload('target', 'camera', event)" class="flex-1 py-1.5 px-2 rounded-lg bg-cyan-600/60 hover:bg-cyan-600/80 backdrop-blur-md text-[11px] font-semibold text-white flex items-center justify-center gap-1 transition">
+                    <i data-lucide="camera" class="w-3 h-3"></i> Retake
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -784,18 +874,118 @@
       }
     }
 
+    /**
+     * Client-side phone camera & image compressor.
+     * Downscales heavy mobile photos (10-30MB) to max 1600px at 0.92 JPEG quality.
+     * Prevents mobile browser freezes, eliminates upload timeouts, and keeps facial details sharp.
+     */
+    async function compressImageForMobile(file, maxDim = 1600, quality = 0.92) {
+      return new Promise((resolve) => {
+        if (!file.type || !file.type.startsWith('image/')) {
+          return resolve({ file, dataUrl: null, size: file.size });
+        }
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onload = () => {
+            let w = img.width;
+            let h = img.height;
+
+            // If already within reasonable dimensions and <= 1.2MB, keep original file
+            if (Math.max(w, h) <= maxDim && file.size < 1.2 * 1024 * 1024 && file.type === 'image/jpeg') {
+              return resolve({ file, dataUrl: e.target.result, size: file.size, width: w, height: h });
+            }
+
+            // Downscale dimensions proportionally
+            if (Math.max(w, h) > maxDim) {
+              if (w > h) {
+                h = Math.round((h * maxDim) / w);
+                w = maxDim;
+              } else {
+                w = Math.round((w * maxDim) / h);
+                h = maxDim;
+              }
+            }
+
+            try {
+              const canvas = document.createElement('canvas');
+              canvas.width = w;
+              canvas.height = h;
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0, w, h);
+
+              canvas.toBlob((blob) => {
+                if (!blob) {
+                  return resolve({ file, dataUrl: e.target.result, size: file.size, width: img.width, height: img.height });
+                }
+                const cleanName = file.name.replace(/\.[^/.]+$/, "") + ".jpg";
+                const compressedFile = new File([blob], cleanName, {
+                  type: 'image/jpeg',
+                  lastModified: Date.now()
+                });
+                resolve({
+                  file: compressedFile,
+                  dataUrl: canvas.toDataURL('image/jpeg', quality),
+                  size: compressedFile.size,
+                  width: w,
+                  height: h
+                });
+              }, 'image/jpeg', quality);
+            } catch (canvasErr) {
+              console.warn('Canvas export fallback:', canvasErr);
+              resolve({ file, dataUrl: e.target.result, size: file.size, width: w, height: h });
+            }
+          };
+          img.onerror = () => resolve({ file, dataUrl: e.target.result, size: file.size });
+          img.src = e.target.result;
+        };
+        reader.onerror = () => resolve({ file, dataUrl: null, size: file.size });
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function triggerUpload(key, mode, event) {
+      if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+      }
+      if (mode === 'camera') {
+        const cam = document.getElementById(`camera-${key}`);
+        if (cam) {
+          cam.value = '';
+          cam.click();
+        }
+      } else {
+        const inp = document.getElementById(`input-${key}`);
+        if (inp) {
+          inp.value = '';
+          inp.click();
+        }
+      }
+    }
+
     function setupDropzones() {
       ['husband', 'wife', 'target'].forEach(key => {
         const dz = document.getElementById(`dropzone-${key}`);
         const input = document.getElementById(`input-${key}`);
+        const camera = document.getElementById(`camera-${key}`);
 
-        dz.addEventListener('click', () => input.click());
-
-        input.addEventListener('change', (e) => {
-          if (e.target.files && e.target.files[0]) {
-            handleFileSelect(key, e.target.files[0]);
-          }
+        // Tapping empty card area triggers gallery input
+        dz.addEventListener('click', (e) => {
+          if (e.target.closest('button') || e.target.closest('input')) return;
+          if (files[key]) return;
+          input.click();
         });
+
+        const onFileChosen = async (e) => {
+          if (e.target.files && e.target.files[0]) {
+            await handleFileSelect(key, e.target.files[0]);
+          }
+        };
+
+        input.addEventListener('change', onFileChosen);
+        if (camera) camera.addEventListener('change', onFileChosen);
 
         dz.addEventListener('dragover', (e) => {
           e.preventDefault();
@@ -806,51 +996,96 @@
           dz.classList.remove('drag-over');
         });
 
-        dz.addEventListener('drop', (e) => {
+        dz.addEventListener('drop', async (e) => {
           e.preventDefault();
           dz.classList.remove('drag-over');
           if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-            handleFileSelect(key, e.dataTransfer.files[0]);
+            await handleFileSelect(key, e.dataTransfer.files[0]);
           }
         });
       });
     }
 
-    function handleFileSelect(key, file) {
-      if (!file.type.startsWith('image/')) {
+    async function handleFileSelect(key, rawFile) {
+      if (!rawFile.type.startsWith('image/')) {
         alert('Please select a valid image file (JPG, PNG, WebP).');
         return;
       }
-      files[key] = file;
 
-      const reader = new FileReader();
-      reader.onload = (e) => {
+      // Show instant optimizing status on the card
+      const emptyDiv = document.getElementById(`empty-${key}`);
+      const originalEmptyHtml = emptyDiv.innerHTML;
+      emptyDiv.innerHTML = `
+        <div class="flex flex-col items-center justify-center space-y-3 py-6">
+          <div class="w-10 h-10 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin"></div>
+          <p class="text-xs text-indigo-300 font-semibold tracking-wide">Optimizing phone photo for AI swap...</p>
+        </div>
+      `;
+
+      try {
+        const result = await compressImageForMobile(rawFile);
+        files[key] = result.file;
+
         const img = document.getElementById(`preview-${key}-img`);
-        img.src = e.target.result;
-        document.getElementById(`empty-${key}`).classList.add('hidden');
+        img.src = result.dataUrl;
+
+        emptyDiv.innerHTML = originalEmptyHtml;
+        emptyDiv.classList.add('hidden');
         document.getElementById(`preview-${key}-box`).classList.remove('hidden');
-        document.getElementById(`${key}-filename`).innerText = file.name;
+        document.getElementById(`${key}-filename`).innerText = result.file.name;
+
+        const sizeKb = Math.round(result.size / 1024);
+        const sizeBadge = document.getElementById(`${key}-filesize`);
+        if (sizeBadge) {
+          sizeBadge.innerText = sizeKb > 1024 ? `${(sizeKb / 1024).toFixed(1)} MB` : `${sizeKb} KB`;
+        }
+
         document.getElementById(`dropzone-${key}`).classList.add('has-file');
 
         if (key === 'target') {
-          targetObjectUrl = e.target.result;
+          targetObjectUrl = result.dataUrl;
         }
 
         updateExecuteButton();
-      };
-      reader.readAsDataURL(file);
+        lucide.createIcons();
+      } catch (err) {
+        console.error('File optimization error:', err);
+        emptyDiv.innerHTML = originalEmptyHtml;
+        files[key] = rawFile;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          document.getElementById(`preview-${key}-img`).src = e.target.result;
+          emptyDiv.classList.add('hidden');
+          document.getElementById(`preview-${key}-box`).classList.remove('hidden');
+          document.getElementById(`${key}-filename`).innerText = rawFile.name;
+          document.getElementById(`dropzone-${key}`).classList.add('has-file');
+          if (key === 'target') targetObjectUrl = e.target.result;
+          updateExecuteButton();
+          lucide.createIcons();
+        };
+        reader.readAsDataURL(rawFile);
+      }
     }
 
     function clearFile(key, event) {
-      if (event) event.stopPropagation();
+      if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+      }
       files[key] = null;
-      document.getElementById(`input-${key}`).value = '';
+      const inp = document.getElementById(`input-${key}`);
+      if (inp) inp.value = '';
+      const cam = document.getElementById(`camera-${key}`);
+      if (cam) cam.value = '';
+
       document.getElementById(`preview-${key}-img`).src = '';
       document.getElementById(`empty-${key}`).classList.remove('hidden');
       document.getElementById(`preview-${key}-box`).classList.add('hidden');
       document.getElementById(`dropzone-${key}`).classList.remove('has-file');
       if (key === 'target') targetObjectUrl = null;
       updateExecuteButton();
+      lucide.createIcons();
     }
 
     function updateExecuteButton() {
