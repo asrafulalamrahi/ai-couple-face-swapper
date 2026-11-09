@@ -151,30 +151,31 @@ class FaceSwapEngine:
         except Exception as e:
             logger.warning(f"Could not load Haar cascade: {e}")
 
-        # Attempt InsightFace initialization
-        try:
-            import insightface
-            from insightface.app import FaceAnalysis
+        # Attempt InsightFace initialization only if inswapper_128.onnx is present
+        swapper_path = MODEL_DIR / "inswapper_128.onnx"
+        if swapper_path.exists():
+            try:
+                import insightface
+                from insightface.app import FaceAnalysis
 
-            logger.info("Initializing InsightFace with buffalo_l...")
-            self._analyser = FaceAnalysis(
-                name="buffalo_l",
-                root=str(MODEL_DIR),
-                providers=["CPUExecutionProvider"],
-            )
-            self._analyser.prepare(ctx_id=0, det_thresh=0.3, det_size=(640, 640))
-
-            swapper_path = MODEL_DIR / "inswapper_128.onnx"
-            if swapper_path.exists():
+                local_buffalo = MODEL_DIR / "models" / "buffalo_l"
+                model_name = "buffalo_l" if local_buffalo.exists() else "buffalo_s"
+                logger.info(f"inswapper_128.onnx found. Initializing InsightFace with {model_name}...")
+                self._analyser = FaceAnalysis(
+                    name=model_name,
+                    root=str(MODEL_DIR),
+                    providers=["CPUExecutionProvider"],
+                )
+                self._analyser.prepare(ctx_id=0, det_thresh=0.3, det_size=(640, 640))
                 self._swapper = insightface.model_zoo.get_model(
                     str(swapper_path),
                     providers=["CPUExecutionProvider"],
                 )
-                logger.info("InsightFace inswapper_128 model loaded.")
-            else:
-                logger.info("inswapper_128.onnx not found. Using OpenCV Poisson Seamless Cloner.")
-        except Exception as e:
-            logger.info(f"InsightFace optional engine status: {e}. Active mode: OpenCV Poisson Cloner.")
+                logger.info(f"InsightFace inswapper_128 model loaded with {model_name}.")
+            except Exception as e:
+                logger.warning(f"InsightFace model load error: {e}. Active mode: OpenCV Poisson Cloner.")
+        else:
+            logger.info("inswapper_128.onnx not present in cloud storage. Running high-speed OpenCV Poisson Seamless Cloner + LAB Color Transfer (<80MB RAM, zero OOM).")
 
         self._initialized = True
 
@@ -490,7 +491,7 @@ def apply_prompt_stylization(img: np.ndarray, prompt: str) -> Tuple[np.ndarray, 
 # Routes
 # ──────────────────────────────────────────────
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 async def root():
     """Serves the main Antigravity Face Swap Studio frontend."""
     index_file = STATIC_DIR / "index.html"
@@ -499,13 +500,13 @@ async def root():
     return JSONResponse(
         content={
             "app": "Antigravity AI - Couple Face Swap Studio",
-            "version": "4.0.0",
+            "version": "4.1.0",
             "docs": "/docs",
         }
     )
 
 
-@app.get("/api/health")
+@app.api_route("/api/health", methods=["GET", "HEAD"])
 async def health_check():
     """Health, engine status, and persistent cloud storage status."""
     face_engine._ensure_initialized()
